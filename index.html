@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D Circuit Simulator</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+    <!-- Math.js for matrix operations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
+</head>
+<body>
+    <div id="app">
+        <!-- 上部パーツパネル -->
+        <header id="toolbar">
+            <div class="toolbar-container">
+                <div class="tool-item" data-type="battery" title="電池">
+                    <div class="icon-box">
+                        <svg viewBox="0 0 50 50">
+                            <path d="M 0,25 L 20,25 M 30,25 L 50,25" stroke="currentColor" stroke-width="2" fill="none" />
+                            <path d="M 20,10 L 20,40 M 30,18 L 30,32" stroke="currentColor" stroke-width="4" fill="none" />
+                        </svg>
+                    </div>
+                    <span>電池</span>
+                </div>
+                <div class="tool-item" data-type="resistor" title="抵抗">
+                    <div class="icon-box">
+                        <svg viewBox="0 0 50 50">
+                            <path d="M 0,25 L 10,25 M 40,25 L 50,25" />
+                            <rect x="10" y="18" width="30" height="14" />
+                        </svg>
+                    </div>
+                    <span>抵抗</span>
+                </div>
+                <div class="tool-item" data-type="bulb" title="電球">
+                    <div class="icon-box">
+                        <svg viewBox="0 0 50 50">
+                            <circle cx="25" cy="25" r="14" fill="none" stroke="currentColor" stroke-width="2" />
+                            <path d="M 15.1,15.1 L 34.9,34.9 M 15.1,34.9 L 34.9,15.1" stroke="currentColor" stroke-width="2" />
+                            <path d="M 0,25 L 11,25 M 39,25 L 50,25" stroke="currentColor" stroke-width="2" />
+                        </svg>
+                    </div>
+                    <span>電球</span>
+                </div>
+                <div class="tool-item" data-type="capacitor" title="コンデンサー">
+                    <div class="icon-box">
+                        <svg viewBox="0 0 50 50">
+                            <path d="M 0,25 L 22,25 M 22,10 L 22,40 M 28,10 L 28,40 M 28,25 L 50,25" />
+                        </svg>
+                    </div>
+                    <span>ｺﾝﾃﾞﾝｻｰ</span>
+                </div>
+                <div class="tool-item" data-type="inductor" title="コイル">
+                    <div class="icon-box">
+                        <svg viewBox="0 0 50 50">
+                            <path d="M 0,25 L 10,25 M 40,25 L 50,25 M 10,25 C 10,15 17.5,15 17.5,25 C 17.5,15 25,15 25,25 C 25,15 32.5,15 32.5,25 C 32.5,15 40,15 40,25" fill="none" stroke="currentColor" stroke-width="2"/>
+                        </svg>
+                    </div>
+                    <span>コイル</span>
+                </div>
+                <div class="tool-item" data-type="voltmeter" title="電圧計">
+                    <div class="icon-box">
+                        <svg viewBox="0 0 50 50">
+                            <path d="M 0,25 L 11,25 M 39,25 L 50,25" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <circle cx="25" cy="25" r="14" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <text x="25" y="30" text-anchor="middle" font-size="14" font-weight="bold" fill="currentColor">V</text>
+                        </svg>
+                    </div>
+                    <span>電圧計</span>
+                </div>
+                <div class="tool-item" data-type="ammeter" title="電流計">
+                    <div class="icon-box">
+                        <svg viewBox="0 0 50 50">
+                            <path d="M 0,25 L 11,25 M 39,25 L 50,25" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <circle cx="25" cy="25" r="14" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <text x="25" y="30" text-anchor="middle" font-size="14" font-weight="bold" fill="currentColor">A</text>
+                        </svg>
+                    </div>
+                    <span>電流計</span>
+                </div>
+
+                <div class="tool-item" data-type="wire" title="導線(直線)">
+                    <div class="icon-box">
+                        <svg viewBox="0 0 50 50">
+                            <path d="M 0,25 L 50,25" />
+                        </svg>
+                    </div>
+                    <span>直線</span>
+                </div>
+                <div class="tool-item" data-type="wire_l" title="導線(L字)">
+                    <div class="icon-box">
+                        <svg viewBox="0 0 50 50">
+                            <path d="M 25,0 L 25,25 L 50,25" />
+                        </svg>
+                    </div>
+                    <span>L字</span>
+                </div>
+                <div class="tool-item" data-type="wire_t" title="導線(T字)">
+                    <div class="icon-box">
+                        <svg viewBox="0 0 50 50">
+                            <path d="M 0,25 L 50,25 M 25,25 L 25,50" />
+                            <circle cx="25" cy="25" r="2" fill="currentColor" />
+                        </svg>
+                    </div>
+                    <span>T字</span>
+                </div>
+                <div class="tool-item" data-type="switch" title="スイッチ">
+                    <div class="icon-box">
+                        <svg viewBox="0 0 50 50">
+                            <circle cx="12" cy="25" r="2" fill="currentColor" />
+                            <circle cx="38" cy="25" r="2" fill="currentColor" />
+                            <path d="M 0,25 L 12,25 M 12,25 L 35,12 M 38,25 L 50,25" />
+                        </svg>
+                    </div>
+                    <span>スイッチ</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- 作業エリア -->
+        <main id="workspace">
+            <button id="results-toggle-btn" class="action-btn" style="display:none; position:absolute; top:20px; right:20px; z-index:90; background-color:#a5d8ff; color:#1a1b1e; font-weight:bold; padding:8px 16px; border-radius:4px; box-shadow:0 4px 6px rgba(0,0,0,0.3);">結果一覧</button>
+            <div id="time-scale-container" style="position:absolute; top:20px; left:20px; z-index:90; background:rgba(0,0,0,0.5); padding:10px 15px; border-radius:8px; border:1px solid var(--glass-border); backdrop-filter:blur(5px);">
+                <label style="color:#fff; font-size:12px; margin-bottom:5px; display:block;">再生速度: <span id="time-scale-val">0.1x</span></label>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="color:#aaa; font-size:10px;">Slow</span>
+                    <input type="range" id="time-scale-slider" min="0.001" max="1.0" step="0.001" value="0.1" style="width:100px;">
+                    <span style="color:#aaa; font-size:10px;">Fast</span>
+                </div>
+                <label id="show-particles-toggle" style="display:none; color:#fff; font-size:12px; cursor:pointer; align-items:center; gap:5px; margin-top:10px;">
+                    <input type="checkbox" id="show-particles-checkbox" checked>
+                    電荷
+                </label>
+            </div>
+            <div id="grid-canvas-container">
+                <svg id="grid-svg" xmlns="http://www.w3.org/2000/svg">
+                    <!-- グリッドの背景線などはjsで生成 -->
+                    <g id="grid-lines"></g>
+                    <g id="circuit-layer"></g>
+                    <g id="ghost-layer"></g>
+                    <g id="interaction-layer"></g>
+                </svg>
+            </div>
+        </main>
+
+        <!-- 下部コントロールとメッセージ -->
+        <footer id="footer">
+            <div class="footer-left">
+                <button id="solve-btn" class="ok-button" style="background-color: #ffb8c6; color: #1a1b1e; font-weight: bold; text-shadow: none;">OK</button>
+            </div>
+            <div id="message-area" class="message-area">
+                <p id="error-text">回路を作成してOKを押してください。</p>
+            </div>
+            <div class="footer-right">
+                <div id="trash-can" class="trash-box">
+                    <div class="trash-icon">🗑️</div>
+                </div>
+            </div>
+        </footer>
+
+        <!-- パラメータ編集ダイアログ -->
+        <div id="param-modal" class="modal">
+            <div class="modal-content" style="position: relative;">
+                <span id="modal-cancel" style="position: absolute; top: 10px; right: 15px; cursor: pointer; font-size: 24px; font-weight: bold; color: var(--text-primary); line-height: 1;">&times;</span>
+                <h3 id="modal-title">パラメータ変更</h3>
+                <div class="input-group" id="input-group-number">
+                    <label for="comp-value" id="comp-value-label" style="display: block; margin-bottom: 5px; font-size: 14px; color: var(--text-secondary);">値:</label>
+                    <div style="display: flex; align-items: center; gap: 5px;">
+                        <input type="number" id="comp-value" step="any" style="flex: 1;">
+                        <span id="comp-unit">Ω</span>
+                    </div>
+                </div>
+                <div class="input-group" id="input-group-switch" style="display: none; margin-top: 5px;">
+                    <label for="comp-switch-val">状態:</label>
+                    <select id="comp-switch-val" style="padding: 5px; border-radius: 4px; background: rgba(255,255,255,0.1); color: white; border: 1px solid var(--glass-border); width: 120px;">
+                        <option value="1">ON (結線)</option>
+                        <option value="0">OFF (切断)</option>
+                    </select>
+                </div>
+                <div class="modal-btns" style="display: flex; justify-content: space-between; align-items: center; margin-top: 15px;">
+                    <button id="modal-delete" style="background-color: transparent; color: #fa5252; border: 1px solid #fa5252; padding: 4px 10px; font-size: 12px; border-radius: 4px;">削除</button>
+                    <button id="modal-save">保存</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 結果一覧パネル -->
+        <div id="results-panel" class="results-panel" style="display:none; top:70px; right:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.2); padding-bottom:5px; margin-bottom:10px;">
+                <h4 style="margin:0;">解析結果</h4>
+                <span id="close-results-btn" style="cursor:pointer; font-size:20px; font-weight:bold; color:#fa5252; padding:0 5px; line-height:1;">&times;</span>
+            </div>
+            <table id="results-table">
+                <thead>
+                    <tr><th>素子(位置)</th><th>電圧(V)</th><th>電流(A)</th></tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <!-- ツールチップ (マウスオーバー用) -->
+        <div id="tooltip" class="tooltip"></div>
+    </div>
+
+    <script src="simulator.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
