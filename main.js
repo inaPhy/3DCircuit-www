@@ -31,6 +31,7 @@ const tooltip = document.getElementById('tooltip');
 // Init
 function init() {
     svg.setAttribute('viewBox', `0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`);
+    document.documentElement.classList.add('light-mode'); // 3Dモデルの色と統一するため、デフォルトはライトモード
     renderGridBackground();
     setupEventListeners();
     render();
@@ -50,7 +51,7 @@ function renderGridBackground() {
             rect.setAttribute('width', CELL_SIZE);
             rect.setAttribute('height', CELL_SIZE);
             rect.setAttribute('fill', fillColor);
-            rect.setAttribute('stroke', 'rgba(255, 255, 255, 0.1)'); // Softer borders for better light pastel colors // OR var(--grid-line)
+            rect.setAttribute('stroke', 'var(--grid-line)'); // Softer borders for better light pastel colors
             rect.setAttribute('stroke-width', '1');
             bgGroup.appendChild(rect);
         }
@@ -70,20 +71,37 @@ function setupEventListeners() {
     window.addEventListener('pointermove', onDragging);
     window.addEventListener('pointerup', endDragging);
 
+    // Dark Mode Toggle
+    const darkModeCheckbox = document.getElementById('dark-mode-checkbox');
+    if (darkModeCheckbox) {
+        darkModeCheckbox.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                document.documentElement.classList.remove('light-mode');
+            } else {
+                document.documentElement.classList.add('light-mode');
+            }
+        });
+    }
+
     // Solve / Stop / Results
     solveBtn.addEventListener('click', toggleSimulation);
-    document.getElementById('results-toggle-btn').addEventListener('click', () => {
-        const panel = document.getElementById('results-panel');
-        if (panel.style.display === 'none') {
-            panel.style.display = 'block';
-            updateResultsTable();
-        } else {
-            panel.style.display = 'none';
-            document.querySelectorAll('.comp-highlight').forEach(el => el.remove());
-        }
-    });
+    const resCheckbox = document.getElementById('results-toggle-checkbox');
+    if (resCheckbox) {
+        resCheckbox.addEventListener('change', (e) => {
+            const panel = document.getElementById('results-panel');
+            if (e.target.checked) {
+                panel.style.display = 'block';
+                updateResultsTable();
+            } else {
+                panel.style.display = 'none';
+                document.querySelectorAll('.comp-highlight').forEach(el => el.remove());
+            }
+        });
+    }
     document.getElementById('close-results-btn').addEventListener('click', () => {
         document.getElementById('results-panel').style.display = 'none';
+        const resCheckbox = document.getElementById('results-toggle-checkbox');
+        if (resCheckbox) resCheckbox.checked = false;
         document.querySelectorAll('.comp-highlight').forEach(el => el.remove());
     });
 
@@ -127,6 +145,9 @@ function updateResultsTable() {
             document.querySelectorAll('.comp-highlight').forEach(el => el.remove());
             const group = document.getElementById(`comp-group-${c.id}`);
             if (group && isSimulating) {
+                // Bring the component group to the front so highlight is not obscured by neighboring panels
+                group.parentNode.appendChild(group);
+                
                 const hl = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
                 hl.setAttribute('x', -35); hl.setAttribute('y', -35);
                 hl.setAttribute('width', 70); hl.setAttribute('height', 70);
@@ -134,8 +155,9 @@ function updateResultsTable() {
                 hl.setAttribute('stroke', '#a5d8ff');
                 hl.setAttribute('stroke-width', '4');
                 hl.setAttribute('rx', '8');
+                hl.setAttribute('filter', 'drop-shadow(0 0 5px #a5d8ff)');
                 hl.classList.add('comp-highlight');
-                group.insertBefore(hl, group.firstChild); 
+                group.appendChild(hl);  
             }
         };
         const unhighlightFn = () => {
@@ -161,8 +183,8 @@ function toggleSimulation() {
     solveBtn.innerText = isSimulating ? '停止' : 'OK';
     solveBtn.style.backgroundColor = isSimulating ? '#a5d8ff' : '#ffb8c6';
     
-    const toggleBtn = document.getElementById('results-toggle-btn');
-    toggleBtn.style.display = isSimulating ? 'inline-block' : 'none';
+    const toggleBtn = document.getElementById('results-toggle-container');
+    if (toggleBtn) toggleBtn.style.display = isSimulating ? 'flex' : 'none';
     
     const showParticlesToggle = document.getElementById('show-particles-toggle');
     if (showParticlesToggle) showParticlesToggle.style.display = isSimulating ? 'flex' : 'none';
@@ -176,12 +198,16 @@ function toggleSimulation() {
         const res = simulator.solve(activeNetlist, 1e-6);
         if (res.success) {
             simulationResults = res;
-            messageArea.innerText = 'シミュレーション開始';
-            messageArea.style.color = '#fff';
+            messageArea.innerText = '開始'; // 短くする
             
             // Show results panel by default when simulation starts
             document.getElementById('results-panel').style.display = 'block';
+            const resCheckbox = document.getElementById('results-toggle-checkbox');
+            if (resCheckbox) resCheckbox.checked = true;
             updateResultsTable();
+            
+            simulator3D.show();
+            simulator3D.update(components, simulationResults);
             
             render();
             startAnimation();
@@ -193,6 +219,7 @@ function toggleSimulation() {
             forceStopSimulation();
         }
     } else {
+        simulator3D.hide();
         simulationResults = null;
         messageArea.innerText = '';
         document.getElementById('results-panel').style.display = 'none';
@@ -237,7 +264,7 @@ function startDragging(e, type, isNew, compId = null) {
         txt.setAttribute('font-size', '10px');
         txt.setAttribute('font-weight', 'bold');
         txt.setAttribute('fill', 'var(--text-primary)');
-        txt.setAttribute('filter', 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))');
+        txt.setAttribute('filter', 'drop-shadow(0 1px 2px var(--text-shadow))');
         ghostWrapper.appendChild(txt);
     }
     
@@ -250,7 +277,7 @@ function startDragging(e, type, isNew, compId = null) {
         btnBg.setAttribute('width', 28);
         btnBg.setAttribute('height', 14);
         btnBg.setAttribute('rx', 4);
-        btnBg.setAttribute('fill', val === 1 ? '#a5d8ff' : '#ffb8c6');
+        btnBg.setAttribute('fill', '#fff');
         
         const btnTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         btnTxt.textContent = val === 1 ? 'ON' : 'OFF';
@@ -433,6 +460,8 @@ function openEdit(id) {
             document.getElementById('comp-value-label').innerText = valLabel;
             document.getElementById('comp-unit').innerText = unit;
         }
+        const bgType = comp.type.startsWith('wire') ? 'wire' : comp.type;
+        document.querySelector('#param-modal .modal-content').style.backgroundColor = `var(--bg-${bgType}, var(--panel-bg))`;
         paramModal.style.display = 'flex';
     }
 }
@@ -443,7 +472,7 @@ function saveParams() {
         if (comp.type === 'switch') {
             comp.value = parseInt(document.getElementById('comp-switch-val').value);
         } else {
-            comp.value = parseFloat(document.getElementById('comp-value').value);
+            comp.value = Math.max(0, parseFloat(document.getElementById('comp-value').value) || 0);
         }
     }
     paramModal.style.display = 'none';
@@ -554,7 +583,7 @@ function render() {
                 txt.setAttribute('font-size', '10px');
                 txt.setAttribute('font-weight', 'bold');
                 txt.setAttribute('fill', 'var(--text-primary)');
-                txt.setAttribute('filter', 'drop-shadow(0 1px 2px rgba(0,0,0,0.8))');
+                txt.setAttribute('filter', 'drop-shadow(0 1px 2px var(--text-shadow))');
                 wrapper.appendChild(txt);
             }
         }
@@ -570,7 +599,7 @@ function render() {
             btnBg.setAttribute('width', 28);
             btnBg.setAttribute('height', 14);
             btnBg.setAttribute('rx', 4);
-            btnBg.setAttribute('fill', comp.value === 1 ? '#a5d8ff' : '#ffb8c6'); // Blue for ON, Pink for OFF
+            btnBg.setAttribute('fill', '#fff');
             
             const btnTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             btnTxt.textContent = comp.value === 1 ? 'ON' : 'OFF';
@@ -638,6 +667,7 @@ function startAnimation() {
             if (res.success) {
                 simulationResults = res;
                 updateDynamicUI();
+                simulator3D.update(components, simulationResults);
             }
         }
         
@@ -829,10 +859,10 @@ function renderParticles() {
                     const rX = -1.5 + rand2 * 3;
                     
                     if (comp.rotation === 0 || comp.rotation === 2) {
-                        splx = (isNeg3Positive ? -3 : 3) + rX;
+                        splx = (isNeg3Positive ? -5 : 5) + rX;
                         sply = rY;
                     } else {
-                        sply = (isNeg3Positive ? -3 : 3) + rX;
+                        sply = (isNeg3Positive ? -5 : 5) + rX;
                         splx = rY;
                     }
                     drawCapParticle(splx, sply);
@@ -846,17 +876,17 @@ function renderParticles() {
                     const progress = (comp.pProgress + p / numCapParticles) % 1;
                     let lx1 = 0, ly1 = 0, lx2 = 0, ly2 = 0;
                     if (comp.rotation === 0) {
-                        lx1 = -30 + progress * 27; ly1 = 0; // Left wire: -30 to -3
-                        lx2 = 3 + progress * 27; ly2 = 0;   // Right wire: 3 to 30
+                        lx1 = -30 + progress * 24; ly1 = 0; // Left wire: -30 to -6
+                        lx2 = 6 + progress * 24; ly2 = 0;   // Right wire: 6 to 30
                     } else if (comp.rotation === 1) {
-                        lx1 = 0; ly1 = -30 + progress * 27; // Top wire: -30 to -3
-                        lx2 = 0; ly2 = 3 + progress * 27;   // Bottom wire: 3 to 30
+                        lx1 = 0; ly1 = -30 + progress * 24; // Top wire: -30 to -6
+                        lx2 = 0; ly2 = 6 + progress * 24;   // Bottom wire: 6 to 30
                     } else if (comp.rotation === 2) {
-                        lx1 = 30 - progress * 27; ly1 = 0;  // Right wire: 30 to 3
-                        lx2 = -3 - progress * 27; ly2 = 0;  // Left wire: -3 to -30
+                        lx1 = 30 - progress * 24; ly1 = 0;  // Right wire: 30 to 6
+                        lx2 = -6 - progress * 24; ly2 = 0;  // Left wire: -6 to -30
                     } else {
-                        lx1 = 0; ly1 = 30 - progress * 27;  // Bottom wire: 30 to 3
-                        lx2 = 0; ly2 = -3 - progress * 27;  // Top wire: -3 to -30
+                        lx1 = 0; ly1 = 30 - progress * 24;  // Bottom wire: 30 to 6
+                        lx2 = 0; ly2 = -6 - progress * 24;  // Top wire: -6 to -30
                     }
                     drawCapParticle(lx1, ly1);
                     drawCapParticle(lx2, ly2);
@@ -929,10 +959,21 @@ function drawComponentVisual(comp) {
     
     // Common background
     const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-    bg.setAttribute('x', -25); bg.setAttribute('y', -25);
-    bg.setAttribute('width', 50); bg.setAttribute('height', 50);
-    bg.setAttribute('fill', 'rgba(255,255,255,0.05)');
-    bg.setAttribute('rx', 4);
+    bg.setAttribute('x', -30); bg.setAttribute('y', -30);
+    bg.setAttribute('width', 60); bg.setAttribute('height', 60);
+    
+    let bgColorVar = '--bg-wire';
+    if (comp.type === 'battery') bgColorVar = '--bg-battery';
+    else if (comp.type === 'resistor') bgColorVar = '--bg-resistor';
+    else if (comp.type === 'switch') bgColorVar = '--bg-switch';
+    else if (comp.type === 'bulb') bgColorVar = '--bg-bulb';
+    else if (comp.type === 'inductor') bgColorVar = '--bg-inductor';
+    else if (comp.type === 'capacitor') bgColorVar = '--bg-capacitor';
+    else if (comp.type === 'voltmeter') bgColorVar = '--bg-voltmeter';
+    else if (comp.type === 'ammeter') bgColorVar = '--bg-ammeter';
+
+    bg.setAttribute('fill', `var(${bgColorVar})`);
+    bg.setAttribute('rx', 0);
     g.appendChild(bg);
 
     // Symbols
@@ -943,26 +984,22 @@ function drawComponentVisual(comp) {
 
     switch (comp.type) {
         case 'battery':
-            const gWires = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            gWires.setAttribute('d', 'M -30,0 L -5,0 M 5,0 L 30,0');
-            gWires.setAttribute('stroke', color);
-            gWires.setAttribute('stroke-width', '2');
-            gWires.setAttribute('fill', 'none');
-            g.appendChild(gWires);
-
-            const gPlates = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            gPlates.setAttribute('d', 'M -5,-15 L -5,15 M 5,-8 L 5,8');
-            gPlates.setAttribute('stroke', color);
-            gPlates.setAttribute('stroke-width', '4');
-            gPlates.setAttribute('fill', 'none');
-            g.appendChild(gPlates);
-            return g;
+            path.setAttribute('d', 'M -30,0 L -6,0 M 6,0 L 30,0');
+            path.setAttribute('stroke-linecap', 'round');
+            const plates = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            plates.setAttribute('d', 'M -6,-18 L -6,18 M 6,-10 L 6,10');
+            plates.setAttribute('stroke', color);
+            plates.setAttribute('stroke-width', '4');
+            plates.setAttribute('fill', 'none');
+            plates.setAttribute('stroke-linecap', 'round');
+            g.appendChild(plates);
+            break;
         case 'resistor':
             path.setAttribute('d', 'M -30,0 L -15,0 M 15,0 L 30,0');
             const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
             rect.setAttribute('x', -15); rect.setAttribute('y', -7);
             rect.setAttribute('width', 30); rect.setAttribute('height', 14);
-            rect.setAttribute('fill', 'none'); rect.setAttribute('stroke', color); rect.setAttribute('stroke-width', '2');
+            rect.setAttribute('fill', 'var(--inner-fill)'); rect.setAttribute('stroke', color); rect.setAttribute('stroke-width', '2');
             g.appendChild(path); g.appendChild(rect);
             return g;
         case 'wire':
@@ -980,13 +1017,24 @@ function drawComponentVisual(comp) {
         case 'bulb':
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('cx', 0); circle.setAttribute('cy', 0); circle.setAttribute('r', 14);
-            circle.setAttribute('fill', 'none');
+            circle.setAttribute('fill', 'var(--inner-fill)');
             circle.setAttribute('stroke', color); circle.setAttribute('stroke-width', '2');
             path.setAttribute('d', 'M -9.9,-9.9 L 9.9,9.9 M -9.9,9.9 L 9.9,-9.9 M -30,0 L -14,0 M 14,0 L 30,0');
-            g.appendChild(circle);
+            const bulbLight = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            bulbLight.setAttribute('cx', 0); bulbLight.setAttribute('cy', 0); bulbLight.setAttribute('r', 14);
+            bulbLight.setAttribute('fill', `rgba(255, 255, 0, ${Math.min(bulbIntensity * 0.5, 0.8)})`);
+            g.appendChild(circle); g.appendChild(bulbLight);
             break;
         case 'capacitor':
-            path.setAttribute('d', 'M -30,0 L -3,0 M -3,-15 L -3,15 M 3,-15 L 3,15 M 3,0 L 30,0');
+            path.setAttribute('d', 'M -30,0 L -6,0 M 6,0 L 30,0');
+            path.setAttribute('stroke-linecap', 'round');
+            const cPlates = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+            cPlates.setAttribute('d', 'M -6,-15 L -6,15 M 6,-15 L 6,15');
+            cPlates.setAttribute('stroke', color);
+            cPlates.setAttribute('stroke-width', '4');
+            cPlates.setAttribute('fill', 'none');
+            cPlates.setAttribute('stroke-linecap', 'round');
+            g.appendChild(cPlates);
             break;
         case 'inductor':
             path.setAttribute('d', 'M -30,0 L -15,0 M 15,0 L 30,0 M -15,0 C -15,-10 -7.5,-10 -7.5,0 C -7.5,-10 0,-10 0,0 C 0,-10 7.5,-10 7.5,0 C 7.5,-10 15,-10 15,0');
@@ -995,7 +1043,7 @@ function drawComponentVisual(comp) {
             path.setAttribute('d', 'M -30,0 L -14,0 M 14,0 L 30,0');
             const vCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             vCircle.setAttribute('cx', 0); vCircle.setAttribute('cy', 0); vCircle.setAttribute('r', 14);
-            vCircle.setAttribute('fill', 'none'); vCircle.setAttribute('stroke', color); vCircle.setAttribute('stroke-width', '2');
+            vCircle.setAttribute('fill', 'var(--inner-fill)'); vCircle.setAttribute('stroke', color); vCircle.setAttribute('stroke-width', '2');
             const vText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             vText.textContent = 'V'; vText.setAttribute('x', 0); vText.setAttribute('y', 0);
             vText.setAttribute('dominant-baseline', 'central');
@@ -1008,7 +1056,7 @@ function drawComponentVisual(comp) {
             path.setAttribute('d', 'M -30,0 L -14,0 M 14,0 L 30,0');
             const aCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             aCircle.setAttribute('cx', 0); aCircle.setAttribute('cy', 0); aCircle.setAttribute('r', 14);
-            aCircle.setAttribute('fill', 'none'); aCircle.setAttribute('stroke', color); aCircle.setAttribute('stroke-width', '2');
+            aCircle.setAttribute('fill', 'var(--inner-fill)'); aCircle.setAttribute('stroke', color); aCircle.setAttribute('stroke-width', '2');
             const aText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             aText.textContent = 'A'; aText.setAttribute('x', 0); aText.setAttribute('y', 0);
             aText.setAttribute('dominant-baseline', 'central');
@@ -1092,8 +1140,10 @@ function buildNetlist() {
         } else if (c.type === 'switch') {
             if (c.value === 1) {
                 let n1, n2;
-                if (c.rotation === 0 || c.rotation === 2) { n1 = left; n2 = right; }
-                else { n1 = top; n2 = bottom; }
+                if (c.rotation === 0) { n1 = left; n2 = right; }
+                else if (c.rotation === 1) { n1 = top; n2 = bottom; }
+                else if (c.rotation === 2) { n1 = right; n2 = left; }
+                else { n1 = bottom; n2 = top; }
                 netlist.push({ id: c.id, type: 'wire', nodes: [n1, n2], value: 0 });
             }
         } else {
@@ -1180,6 +1230,38 @@ function showTooltip(e, comp) {
 
 function hideTooltip() {
     tooltip.style.display = 'none';
+}
+
+// 結果パネルのドラッグ移動
+const resultsPanel = document.getElementById('results-panel');
+const resultsHeader = document.getElementById('results-panel-header');
+let isDraggingResults = false;
+let dragStartX, dragStartY, initialPanelX, initialPanelY;
+
+if (resultsHeader && resultsPanel) {
+    resultsHeader.addEventListener('mousedown', (e) => {
+        if (e.target.id === 'close-results-btn') return;
+        isDraggingResults = true;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        initialPanelX = resultsPanel.offsetLeft;
+        initialPanelY = resultsPanel.offsetTop;
+        e.preventDefault();
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (isDraggingResults) {
+            const dx = e.clientX - dragStartX;
+            const dy = e.clientY - dragStartY;
+            resultsPanel.style.left = `${initialPanelX + dx}px`;
+            resultsPanel.style.top = `${initialPanelY + dy}px`;
+            resultsPanel.style.right = 'auto'; // 右端固定を解除
+        }
+    });
+
+    window.addEventListener('mouseup', () => {
+        isDraggingResults = false;
+    });
 }
 
 init();

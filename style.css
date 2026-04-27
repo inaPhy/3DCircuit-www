@@ -10,6 +10,44 @@
     --error-bg: rgba(248, 81, 73, 0.1);
     --error-text: #f85149;
     --success-text: #3fb950;
+
+    --bg-battery: rgba(255, 255, 255, 0.05);
+    --bg-resistor: rgba(255, 255, 255, 0.05);
+    --bg-switch: rgba(255, 255, 255, 0.05);
+    --bg-bulb: rgba(255, 255, 255, 0.05);
+    --bg-inductor: rgba(255, 255, 255, 0.05);
+    --bg-capacitor: rgba(255, 255, 255, 0.05);
+    --bg-voltmeter: rgba(255, 255, 255, 0.05);
+    --bg-ammeter: rgba(255, 255, 255, 0.05);
+    --bg-wire: rgba(255, 255, 255, 0.05);
+    --text-shadow: rgba(0, 0, 0, 0.8);
+    --inner-fill: transparent;
+}
+
+:root.light-mode {
+    --bg-color: #ffffff;
+    --panel-bg: rgba(240, 240, 240, 0.85);
+    --accent-color: #66b2ff; /* 薄い青色に変更 */
+    --text-primary: #333333;
+    --text-secondary: #666666;
+    --grid-line: rgba(0, 0, 0, 0.1);
+    --grid-line-strong: rgba(0, 0, 0, 0.25);
+    --glass-border: rgba(0, 0, 0, 0.1);
+    --error-bg: rgba(248, 81, 73, 0.1);
+    --error-text: #d73a49;
+    --success-text: #28a745;
+
+    --bg-battery: #FF8C8C;
+    --bg-resistor: #FFFF8C;
+    --bg-switch: #fffaf0;
+    --bg-bulb: #CCCCCC;
+    --bg-inductor: #71FFFF;
+    --bg-capacitor: #98fb98;
+    --bg-voltmeter: #ffd700;
+    --bg-ammeter: #0099ff;
+    --bg-wire: #FFFFFF;
+    --text-shadow: rgba(255, 255, 255, 0.8);
+    --inner-fill: #ffffff;
 }
 
 * {
@@ -74,8 +112,8 @@ body {
 }
 
 .icon-box {
-    width: 50px;
-    height: 50px;
+    width: 60px;
+    height: 60px;
     border: 1px solid var(--glass-border);
     background-color: rgba(255, 255, 255, 0.05);
     display: flex;
@@ -95,7 +133,6 @@ body {
     height: 60%;
     stroke: var(--text-primary);
     stroke-width: 2;
-    fill: none;
 }
 
 /* ワークスペース */
@@ -110,11 +147,13 @@ body {
 }
 
 #grid-canvas-container {
+    flex: 1;
     width: 100%;
     height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
+    position: relative;
 }
 
 #grid-svg {
@@ -137,7 +176,6 @@ body {
 }
 
 .ok-button {
-    background: linear-gradient(135deg, #238636, #2ea043);
     color: white;
     border: none;
     padding: 12px 30px;
@@ -229,6 +267,14 @@ body {
 #modal-cancel { background: #30363d; color: white; }
 #modal-save { background: var(--accent-color); color: white; }
 
+#comp-value {
+    font-size: 24px;
+    font-weight: bold;
+    padding: 8px;
+    width: 140px;
+    text-align: right;
+}
+
 /* ツールチップ */
 .tooltip {
     position: absolute;
@@ -287,7 +333,7 @@ input[type=range]::-moz-range-thumb {
     position: absolute;
     right: 20px;
     top: 20px;
-    background: rgba(30, 30, 30, 0.85);
+    background: var(--panel-bg);
     backdrop-filter: blur(10px);
     border: 1px solid var(--glass-border);
     border-radius: 8px;
@@ -353,4 +399,9 @@ input[type=range]::-moz-range-thumb {
         display: flex;
         justify-content: center;
     }
+}
+
+/* カスタムトグルアイコンの回転 */
+.custom-toggle-label input:checked + .toggle-icon svg {
+    transform: rotateX(180deg);
 }
