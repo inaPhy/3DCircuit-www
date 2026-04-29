@@ -6,6 +6,7 @@ class Simulator3D {
         this.renderer = null;
         this.controls = null;
         this.meshes = [];
+        this.particleMesh = null;
         this.isActive = false;
         
         this.GRID_SCALE = 50; // Visual scale factor for grid X/Y
@@ -17,7 +18,7 @@ class Simulator3D {
         if (this.scene) return;
 
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color('#ffdce6');
+        this.scene.background = null;
 
         const width = this.container.clientWidth;
         const height = this.container.clientHeight;
@@ -27,11 +28,12 @@ class Simulator3D {
         this.camera.up.set(0, 0, 1); // Z is up
 
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        this.renderer.setClearColor(0x000000, 0); // 透明
         this.renderer.setSize(width, height);
         this.renderer.setPixelRatio(window.devicePixelRatio);
         this.container.appendChild(this.renderer.domElement);
 
-        this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
+        this.controls = new THREE.OrbitControls(this.camera, document.getElementById('workspace-content'));
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
 
@@ -48,6 +50,13 @@ class Simulator3D {
         gridHelper.material.transparent = true;
         gridHelper.rotation.x = Math.PI / 2; 
         this.scene.add(gridHelper);
+        
+        // 電荷表示用のインスタンスメッシュ（最大2000個）
+        const particleGeo = new THREE.SphereGeometry(2, 6, 6);
+        const particleMat = new THREE.MeshBasicMaterial({ color: 0xfcc419 });
+        this.particleMesh = new THREE.InstancedMesh(particleGeo, particleMat, 2000);
+        this.particleMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.scene.add(this.particleMesh);
 
         window.addEventListener('resize', () => this.onWindowResize());
         
@@ -192,14 +201,15 @@ class Simulator3D {
         // 動的接続性スキャン（バッテリーから繋がるアクティブなノードを特定）
         const activeNodes = new Set();
         this.circuitComponents.forEach(comp => {
-            if (comp.type === 'battery') {
+            if (comp.type === 'battery' || comp.type === 'ac_source') {
                 const isHoriz = (comp.rotation === 0 || comp.rotation === 2);
                 const n1 = isHoriz ? `v_${comp.x}_${comp.y}` : `h_${comp.x}_${comp.y}`;
                 const n2 = isHoriz ? `v_${comp.x+1}_${comp.y}` : `h_${comp.x}_${comp.y+1}`;
                 const v1 = simulationResults.voltages[n1];
                 const v2 = simulationResults.voltages[n2];
-                // 実質的に機能している（MNAで電位差が解かれている）電池のみをアクティブの起点とする
-                if (v1 !== undefined && v2 !== undefined && Math.abs(v1 - v2) > 0.1) {
+                // 実質的に機能している（MNAで電位差が解かれている）電源をアクティブの起点とする。
+                // 交流電源は0Vを跨ぐため、しきい値は十分に小さく設定する。
+                if (v1 !== undefined && v2 !== undefined && (Math.abs(v1 - v2) > 1e-6 || comp.type === 'ac_source')) {
                     activeNodes.add(n1);
                     activeNodes.add(n2);
                 }
@@ -234,12 +244,9 @@ class Simulator3D {
         }
 
         // activeNodesに含まれる電圧のみを使ってminVを決定する（ノイズとしての0Vを排除）
-        let minV = Infinity;
-        for (const node of activeNodes) {
-            const v = simulationResults.voltages[node];
-            if (v !== undefined && v < minV) minV = v;
-        }
-        if (minV === Infinity) minV = 0;
+        // 常に0Vを基準（地面）とする。AC回路などで負の電位がある場合は地面の下に描画されるが、
+        // そうしないと0V地点（未接続素子など）がACの変動に合わせて跳ね上がってしまう。
+        let minV = 0;
 
         this.circuitComponents.forEach(comp => {
             const leftNode = `v_${comp.x}_${comp.y}`;
@@ -406,10 +413,12 @@ class Simulator3D {
         });
     }
 
-    getComponentTexture(comp) {
-        // Simple caching based on type, rotation, and state
+    getComponentTexture(comp, isHighlighted = false) {
+        const isDarkMode = !document.documentElement.classList.contains('light-mode');
+        // Simple caching based on type, rotation, state, and theme
         const stateKey = comp.type === 'switch' ? (comp.value === 1 ? "on" : "off") : "";
-        const key = comp.type + "_" + comp.rotation + "_" + stateKey;
+        const themeKey = isDarkMode ? "dark" : "light";
+        const key = comp.type + "_" + comp.rotation + "_" + stateKey + "_" + themeKey + (isHighlighted ? "_hl" : "");
         if (this.textureParams[key]) return this.textureParams[key];
 
         const canvas = document.createElement('canvas');
@@ -418,7 +427,7 @@ class Simulator3D {
         const ctx = canvas.getContext('2d');
 
         // Background color
-        if (comp.type === 'battery') ctx.fillStyle = 'rgba(255, 120, 120, 0.9)';
+        if (comp.type === 'battery' || comp.type === 'ac_source') ctx.fillStyle = 'rgba(255, 120, 120, 0.9)';
         else if (comp.type === 'resistor') ctx.fillStyle = 'rgba(255, 255, 120, 0.9)';
         else if (comp.type === 'switch') ctx.fillStyle = '#fffaf0';
         else if (comp.type === 'bulb') ctx.fillStyle = '#CCCCCC';
@@ -435,6 +444,7 @@ class Simulator3D {
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
+        ctx.save();
         ctx.translate(64, 64);
         if (comp.rotation) ctx.rotate(comp.rotation * Math.PI / 2);
 
@@ -460,6 +470,23 @@ class Simulator3D {
             ctx.moveTo(15, 0); ctx.lineTo(64, 0);
             ctx.moveTo(-15, -30); ctx.lineTo(-15, 30);
             ctx.moveTo(15, -16); ctx.lineTo(15, 16);
+            ctx.stroke(); ctx.beginPath();
+        } else if (comp.type === 'ac_source') {
+            ctx.moveTo(-64, 0); ctx.lineTo(-36, 0);
+            ctx.moveTo(36, 0); ctx.lineTo(64, 0);
+            ctx.stroke(); ctx.beginPath();
+            
+            ctx.fillStyle = isDarkMode ? 'transparent' : '#ffffff';
+            ctx.lineWidth = 8; // わずかに細く (10 から 8 へ)
+            ctx.arc(0, 0, 36, 0, Math.PI*2);
+            if (!isDarkMode) ctx.fill();
+            ctx.stroke(); ctx.beginPath();
+
+            ctx.lineWidth = 6; // 波は元の太さに戻す
+            // サイン波を平坦化 (20 -> 12)
+            ctx.moveTo(-20, 0);
+            ctx.bezierCurveTo(-20, -12, -10, -12, 0, 0);
+            ctx.bezierCurveTo(10, 12, 20, 12, 20, 0);
             ctx.stroke(); ctx.beginPath();
         } else if (comp.type === 'capacitor') {
             ctx.moveTo(-64, 0); ctx.lineTo(-15, 0);
@@ -510,11 +537,227 @@ class Simulator3D {
         }
 
         ctx.stroke();
+        ctx.restore();
+
+        // 枠線のハイライトをテクスチャの縁に描画
+        if (isHighlighted) {
+            ctx.strokeStyle = '#a5d8ff';
+            ctx.lineWidth = 16;
+            ctx.strokeRect(0, 0, 128, 128);
+        }
 
         const tex = new THREE.CanvasTexture(canvas);
         tex.anisotropy = 4;
         this.textureParams[key] = tex;
         return tex;
+    }
+
+    highlightComponent(id) {
+        if (!this.isActive) return;
+        this.meshes.forEach(mesh => {
+            if (mesh.userData.comp && mesh.userData.comp.id === id) {
+                const hlTex = this.getComponentTexture(mesh.userData.comp, true);
+                mesh.material.map = hlTex;
+                mesh.material.needsUpdate = true;
+            }
+        });
+    }
+
+    unhighlightComponent() {
+        if (!this.isActive) return;
+        this.meshes.forEach(mesh => {
+            if (mesh.userData.comp) {
+                const normalTex = this.getComponentTexture(mesh.userData.comp, false);
+                mesh.material.map = normalTex;
+                mesh.material.needsUpdate = true;
+            }
+        });
+    }
+
+    updateParticles(components, simulationResults) {
+        if (!this.isActive || !this.particleMesh || !simulationResults) return;
+
+        const showParticlesCheckbox = document.getElementById('show-particles-checkbox');
+        if (showParticlesCheckbox && !showParticlesCheckbox.checked) {
+            this.particleMesh.visible = false;
+            return;
+        }
+        this.particleMesh.visible = true;
+
+        let count = 0;
+        const dummy = new THREE.Object3D();
+        
+        // 常に0Vを基準（地面）とする
+        const minV = 0;
+
+        components.forEach(comp => {
+            const cx = (comp.x + 0.5 - this.cx) * this.GRID_SCALE;
+            const cy = -(comp.y + 0.5 - this.cy) * this.GRID_SCALE;
+            
+            const leftNode = `v_${comp.x}_${comp.y}`;
+            const rightNode = `v_${comp.x+1}_${comp.y}`;
+            const topNode = `h_${comp.x}_${comp.y}`;
+            const bottomNode = `h_${comp.x}_${comp.y+1}`;
+
+            const getV = (node) => (simulationResults.voltages[node] !== undefined ? simulationResults.voltages[node] : minV);
+            // 素子が等電位である場合に、接続されているいずれかのノードから有効な電位を取得する
+            const getAnyV = () => {
+                const vals = [simulationResults.voltages[leftNode], simulationResults.voltages[rightNode], simulationResults.voltages[topNode], simulationResults.voltages[bottomNode]];
+                for (const v of vals) { if (v !== undefined) return v; }
+                return minV;
+            };
+
+            if (comp.type === 'wire_t') {
+                const eqV = getAnyV(); // T字は等電位
+                const z = (eqV - minV) * this.Z_SCALE;
+                
+                let activeSides = [];
+                if (comp.rotation === 0) activeSides = ['left', 'right', 'bottom'];
+                else if (comp.rotation === 1) activeSides = ['top', 'bottom', 'left'];
+                else if (comp.rotation === 2) activeSides = ['left', 'right', 'top'];
+                else activeSides = ['top', 'bottom', 'right'];
+
+                activeSides.forEach(side => {
+                    if (!comp.legProgress || comp.legProgress[side] === undefined) return;
+                    const num = 2;
+                    for (let p = 0; p < num; p++) {
+                        if (count >= 2000) break;
+                        const normProg = (comp.legProgress[side] + p / num) % 1;
+                        let lx = 0, ly = 0;
+                        if (side === 'left') { lx = -0.5 + normProg * 0.5; ly = 0; }
+                        else if (side === 'right') { lx = 0.5 - normProg * 0.5; ly = 0; }
+                        else if (side === 'top') { lx = 0; ly = 0.5 - normProg * 0.5; }
+                        else if (side === 'bottom') { lx = 0; ly = -0.5 + normProg * 0.5; }
+
+                        dummy.position.set(cx + lx * this.GRID_SCALE, cy + ly * this.GRID_SCALE, z + 2);
+                        dummy.updateMatrix();
+                        this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                    }
+                });
+            } else if (comp.type === 'wire_l') {
+                const eqV = getAnyV(); // L字は等電位
+                const z = (eqV - minV) * this.Z_SCALE;
+                const num = 4;
+                for (let p = 0; p < num; p++) {
+                    if (count >= 2000) break;
+                    const prog = (comp.pProgress + p / num) % 1;
+                    let lx, ly;
+                    if (prog < 0.5) {
+                        lx = 0; ly = -0.5 + prog; // 2D: Top to Center
+                    } else {
+                        lx = (prog - 0.5); ly = 0; // 2D: Center to Right
+                    }
+                    // Apply rotation in 2D space then invert Y for 3D
+                    let rx = lx, ry = ly;
+                    if (comp.rotation === 1) { const tx = rx; rx = -ry; ry = tx; }
+                    else if (comp.rotation === 2) { rx = -rx; ry = -ry; }
+                    else if (comp.rotation === 3) { const tx = rx; rx = ry; ry = -tx; }
+                    
+                    dummy.position.set(cx + rx * this.GRID_SCALE, cy - ry * this.GRID_SCALE, z + 2);
+                    dummy.updateMatrix();
+                    this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                }
+            } else if (comp.type === 'capacitor') {
+                let v1, v2;
+                if (comp.rotation === 0) { v1 = getV(leftNode); v2 = getV(rightNode); }
+                else if (comp.rotation === 1) { v1 = getV(topNode); v2 = getV(bottomNode); }
+                else if (comp.rotation === 2) { v1 = getV(rightNode); v2 = getV(leftNode); }
+                else { v1 = getV(bottomNode); v2 = getV(topNode); }
+                
+                // 1. Static Stored Charges (Plate Colony)
+                const plateDiff = v1 - v2;
+                const numStatic = Math.min(Math.round(Math.abs(plateDiff) * 8), 40);
+                if (numStatic > 0) {
+                    const isV1Positive = plateDiff > 0;
+                    for (let s = 0; s < numStatic; s++) {
+                        if (count >= 2000) break;
+                        const hash1 = Math.abs(Math.sin(s * 12.9898 + comp.x * 78.233 + comp.y) * 43758.5453);
+                        const hash2 = Math.abs(Math.sin(s * 78.233 + comp.x * 12.9898 + comp.y * 3) * 43758.5453);
+                        const rand1 = hash1 - Math.floor(hash1);
+                        const rand2 = hash2 - Math.floor(hash2);
+                        
+                        const rY = -0.23 + rand1 * 0.46; 
+                        const rX = -0.025 + rand2 * 0.05;
+                        
+                        let lx, ly, z;
+                        const v1Offset = (comp.rotation === 0) ? -0.08 : (comp.rotation === 1) ? 0.08 : (comp.rotation === 2) ? 0.08 : -0.08;
+                        const v2Offset = -v1Offset;
+                        
+                        if (comp.rotation === 0 || comp.rotation === 2) {
+                            lx = (isV1Positive ? v1Offset : v2Offset) + (isV1Positive ? rX : -rX); 
+                            ly = rY;
+                        } else {
+                            ly = (isV1Positive ? v1Offset : v2Offset) - (isV1Positive ? rX : -rX);
+                            lx = rY;
+                        }
+                        z = (isV1Positive ? v1 : v2);
+                        
+                        dummy.position.set(cx + lx * this.GRID_SCALE, cy + ly * this.GRID_SCALE, (z - minV) * this.Z_SCALE + 2);
+                        dummy.updateMatrix();
+                        this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                    }
+                }
+
+                // 2. Moving Charges (Wires)
+                const num = 2;
+                for (let p = 0; p < num; p++) {
+                    const prog = (comp.pProgress + p / num) % 1;
+                    for (let wire = 0; wire < 2; wire++) {
+                        if (count >= 2000) break;
+                        let lx = 0, ly = 0, z = 0;
+                        const wireProg = (wire === 0) ? prog * 0.4 : 0.6 + prog * 0.4;
+                        const currentV = (wire === 0) ? v1 : v2;
+                        z = (currentV - minV) * this.Z_SCALE;
+
+                        if (comp.rotation === 0) { lx = -0.5 + wireProg; ly = 0; }
+                        else if (comp.rotation === 1) { lx = 0; ly = 0.5 - wireProg; }
+                        else if (comp.rotation === 2) { lx = 0.5 - wireProg; ly = 0; }
+                        else { lx = 0; ly = -0.5 + wireProg; }
+
+                        dummy.position.set(cx + lx * this.GRID_SCALE, cy + ly * this.GRID_SCALE, z + 2);
+                        dummy.updateMatrix();
+                        this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                    }
+                }
+            } else {
+                // 一般的な素子
+                let v1, v2;
+                if (comp.rotation === 0) { v1 = getV(leftNode); v2 = getV(rightNode); }
+                else if (comp.rotation === 1) { v1 = getV(topNode); v2 = getV(bottomNode); }
+                else if (comp.rotation === 2) { v1 = getV(rightNode); v2 = getV(leftNode); }
+                else { v1 = getV(bottomNode); v2 = getV(topNode); }
+                const num = 4;
+                for (let p = 0; p < num; p++) {
+                    if (count >= 2000) break;
+                    const prog = (comp.pProgress + p / num) % 1;
+                    let lx = 0, ly = 0;
+                    if (comp.rotation === 0) { lx = -0.5 + prog; ly = 0; }
+                    else if (comp.rotation === 1) { lx = 0; ly = 0.5 - prog; }
+                    else if (comp.rotation === 2) { lx = 0.5 - prog; ly = 0; }
+                    else { lx = 0; ly = -0.5 + prog; }
+
+                    let z = 0;
+                    if (['battery', 'switch'].includes(comp.type)) {
+                        z = (prog < 0.5 ? v1 : v2);
+                    } else {
+                        z = v1 + (v2 - v1) * prog;
+                    }
+                    z = (z - minV) * this.Z_SCALE;
+
+                    dummy.position.set(cx + lx * this.GRID_SCALE, cy + ly * this.GRID_SCALE, z + 2);
+                    dummy.updateMatrix();
+                    this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                }
+            }
+        });
+
+        // 残りのインスタンスを場外へ
+        dummy.position.set(0, 0, -10000);
+        dummy.updateMatrix();
+        for (; count < 2000; count++) {
+            this.particleMesh.setMatrixAt(count, dummy.matrix);
+        }
+        this.particleMesh.instanceMatrix.needsUpdate = true;
     }
 }
 

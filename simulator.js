@@ -11,11 +11,13 @@ class Simulator {
             voltages: {}, // compID -> voltage from previous step
             currents: {}  // compID -> current from previous step
         };
+        this.time = 0;
     }
 
     reset() {
         this.results = null;
         this.history = { voltages: {}, currents: {} };
+        this.time = 0;
     }
 
     /**
@@ -25,41 +27,91 @@ class Simulator {
      * @returns {Object} result - {success, message, voltages, currents}
      */
     solve(netlist, dt = 0) {
+        if (dt > 0) this.time += dt;
         if (netlist.length === 0) {
             return { success: false, message: "素子が配置されていません。" };
         }
 
         try {
-            // 1. Identify unique nodes
-            const nodeMap = new Map();
-            let nodeIdx = 0;
-            netlist.forEach(c => {
-                c.nodes.forEach(n => {
-                    if (!nodeMap.has(n)) {
-                        nodeMap.set(n, nodeIdx++);
-                    }
-                });
-            });
-
-            const numNodes = nodeMap.size;
-            if (numNodes < 2) {
+            // 1. Identify unique nodes and connected components
+            const nodes = Array.from(new Set(netlist.flatMap(c => c.nodes)));
+            if (nodes.length < 2) {
                 return { success: false, message: "回路が接続されていません。" };
             }
 
+            const adj = new Map();
+            nodes.forEach(n => adj.set(n, []));
+            netlist.forEach(c => {
+                adj.get(c.nodes[0]).push(c.nodes[1]);
+                adj.get(c.nodes[1]).push(c.nodes[0]);
+            });
+
+            const visited = new Set();
+            const componentsList = [];
+            nodes.forEach(n => {
+                if (!visited.has(n)) {
+                    const compNodes = [];
+                    const q = [n];
+                    visited.add(n);
+                    while(q.length > 0) {
+                        const curr = q.shift();
+                        compNodes.push(curr);
+                        adj.get(curr).forEach(neighbor => {
+                            if (!visited.has(neighbor)) {
+                                visited.add(neighbor);
+                                q.push(neighbor);
+                            }
+                        });
+                    }
+                    componentsList.push(compNodes);
+                }
+            });
+
+            // For each isolated sub-circuit, pick a ground node
+            const groundNodes = new Set();
+            componentsList.forEach(compNodes => {
+                let gNode = compNodes[0];
+                const pSources = netlist.filter(c => (c.type === 'battery' || c.type === 'ac_source') && (compNodes.includes(c.nodes[0]) || compNodes.includes(c.nodes[1])));
+                if (pSources.length > 0) {
+                    gNode = pSources[0].nodes[1]; // Prefer battery negative terminal or AC terminal 2
+                }
+                groundNodes.add(gNode);
+            });
+
+            const nodeMap = new Map();
+            let varIdx = 1; // 0 is reserved for ground
+            nodes.forEach(n => {
+                if (groundNodes.has(n)) {
+                    nodeMap.set(n, 0);
+                } else {
+                    nodeMap.set(n, varIdx++);
+                }
+            });
+
+            const numVariables = varIdx - 1;
+
             // 2. Identify voltage sources (for MNA 'B' matrix)
             const vSources = netlist.filter(c => c.type === 'battery');
-            const numVSources = vSources.length;
+            const acSources = netlist.filter(c => c.type === 'ac_source');
+            const numVSources = vSources.length + acSources.length;
 
-            // Matrix size: (numNodes - 1) + numVSources
-            // We pin node 0 to 0V (Ground)
-            const size = (numNodes - 1) + numVSources;
+            // Matrix size: numVariables + numVSources
+            const size = numVariables + numVSources;
+
+            if (size === 0) {
+                const voltages = {};
+                nodes.forEach(n => voltages[n] = 0);
+                const currents = {};
+                netlist.forEach(c => currents[c.id] = 0);
+                return { success: true, voltages, currents };
+            }
             
             // Initialize matrices using math.js
             let A = math.zeros(size, size);
             let Z = math.zeros(size, 1);
 
-            // ground node index (usually 0)
-            const gndNode = 0; 
+            // ground node index
+            const gndNode = 0;
 
             // 3. Stamping
             netlist.forEach((c, cIdx) => {
@@ -79,10 +131,18 @@ class Simulator {
                         A.set([n1, n2], math.subtract(A.get([n1, n2]), g));
                         A.set([n2, n1], math.subtract(A.get([n2, n1]), g));
                     }
-                } else if (c.type === 'battery') {
-                    const vSourceIdx = vSources.indexOf(c);
-                    const vRow = (numNodes - 1) + vSourceIdx;
-                    const val = parseFloat(c.value) || 1.5;
+                } else if (c.type === 'battery' || c.type === 'ac_source') {
+                    const isAC = c.type === 'ac_source';
+                    const vSourceIdx = isAC ? (vSources.length + acSources.indexOf(c)) : vSources.indexOf(c);
+                    const vRow = numVariables + vSourceIdx;
+                    let val = parseFloat(c.value) || 0;
+
+                    if (isAC) {
+                        // AC Source: V(t) = Vpeak * sin(2 * PI * f * t + phase)
+                        const f = parseFloat(c.freq) || 1.0;
+                        const p = (parseFloat(c.phase) || 0) * (Math.PI / 180);
+                        val = val * Math.sin(2 * Math.PI * f * this.time + p);
+                    }
 
                     if (n1 !== -1) {
                         A.set([n1, vRow], 1);
@@ -170,9 +230,10 @@ class Simulator {
                 if (c.type === 'resistor' || c.type === 'bulb' || c.type === 'voltmeter' || c.type === 'ammeter' || c.type === 'wire') {
                     const r = c.type === 'wire' ? 1e-6 : parseFloat(c.value) || 100;
                     currents[c.id] = (v1 - v2) / r;
-                } else if (c.type === 'battery') {
-                    const vSourceIdx = vSources.indexOf(c);
-                    currents[c.id] = X.get([(numNodes - 1) + vSourceIdx, 0]);
+                } else if (c.type === 'battery' || c.type === 'ac_source') {
+                    const isAC = c.type === 'ac_source';
+                    const vSourceIdx = isAC ? (vSources.length + acSources.indexOf(c)) : vSources.indexOf(c);
+                    currents[c.id] = X.get([numVariables + vSourceIdx, 0]);
                 } else if (c.type === 'capacitor') {
                     if (dt > 0) {
                         const c_val = (parseFloat(c.value) || 10000) * 1e-6;

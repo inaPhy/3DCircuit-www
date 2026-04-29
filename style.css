@@ -19,9 +19,15 @@
     --bg-capacitor: rgba(255, 255, 255, 0.05);
     --bg-voltmeter: rgba(255, 255, 255, 0.05);
     --bg-ammeter: rgba(255, 255, 255, 0.05);
+    --bg-ac_source: rgba(255, 255, 255, 0.05);
     --bg-wire: rgba(255, 255, 255, 0.05);
     --text-shadow: rgba(0, 0, 0, 0.8);
     --inner-fill: transparent;
+    --slider-track: rgba(255, 255, 255, 0.4);
+    --slider-thumb-img: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke='white' stroke-width='2' fill='%23222222' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 15 15'%3E%3C/polyline%3E%3C/svg%3E");
+    --comp-slider-thumb-img: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke='white' stroke-width='2' fill='%23222222' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpath d='M 7 12 L 17 12 M 7 12 L 10 9 M 7 12 L 10 15 M 17 12 L 14 9 M 17 12 L 14 15'/%3E%3C/svg%3E");
+    --graph-inner-bg: rgba(0,0,0,0.3);
+    --graph-grid: rgba(255,255,255,0.05);
 }
 
 :root.light-mode {
@@ -45,9 +51,15 @@
     --bg-capacitor: #98fb98;
     --bg-voltmeter: #ffd700;
     --bg-ammeter: #0099ff;
+    --bg-ac_source: #FF8C8C;
     --bg-wire: #FFFFFF;
+    --graph-inner-bg: #ffffff;
+    --graph-grid: rgba(0,0,0,0.05);
     --text-shadow: rgba(255, 255, 255, 0.8);
     --inner-fill: #ffffff;
+    --slider-track: #333333;
+    --slider-thumb-img: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke='%23333333' stroke-width='2' fill='white' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 15 15'%3E%3C/polyline%3E%3C/svg%3E");
+    --comp-slider-thumb-img: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke='%23333333' stroke-width='2' fill='white' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpath d='M 7 12 L 17 12 M 7 12 L 10 9 M 7 12 L 10 15 M 17 12 L 14 9 M 17 12 L 14 15'/%3E%3C/svg%3E");
 }
 
 * {
@@ -79,6 +91,7 @@ body {
     border-bottom: 1px solid var(--glass-border);
     padding: 10px 0;
     z-index: 100;
+    position: relative;
 }
 
 .toolbar-container {
@@ -106,9 +119,7 @@ body {
 }
 
 .tool-item span {
-    font-size: 10px;
-    margin-top: 5px;
-    color: var(--text-secondary);
+    display: none;
 }
 
 .icon-box {
@@ -229,6 +240,126 @@ body {
     transform: scale(1.1);
 }
 
+#trash-can.drag-over .trash-lid {
+    transform: rotate(-30deg) translate(-5px, -10px);
+}
+
+#trash-can.drag-over .trash-text {
+    display: block !important;
+}
+
+/* カスタムスライダー (強制適用) */
+#time-scale-slider {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    background: transparent !important;
+    outline: none !important;
+    margin: 0 !important;
+}
+#time-scale-slider::-webkit-slider-runnable-track {
+    width: 100% !important;
+    height: 4px !important;
+    cursor: pointer !important;
+    background: var(--slider-track) !important;
+    border-radius: 2px !important;
+}
+#time-scale-slider::-webkit-slider-thumb {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 50% !important;
+    background-color: transparent !important;
+    background-image: var(--slider-thumb-img) !important;
+    background-size: contain !important;
+    cursor: pointer !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5) !important;
+    transition: transform 0.1s !important;
+    margin-top: -15px !important;
+}
+#time-scale-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.1) !important;
+}
+#time-scale-slider::-moz-range-track {
+    width: 100% !important;
+    height: 4px !important;
+    cursor: pointer !important;
+    background: var(--slider-track) !important;
+    border-radius: 2px !important;
+}
+#time-scale-slider::-moz-range-thumb {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 50% !important;
+    background-color: transparent !important;
+    background-image: var(--slider-thumb-img) !important;
+    background-size: contain !important;
+    cursor: pointer !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5) !important;
+    transition: transform 0.1s !important;
+    border: none !important;
+}
+#time-scale-slider::-moz-range-thumb:hover {
+    transform: scale(1.1) !important;
+}
+
+/* パラメータ編集用スライダー */
+/* パラメータ編集用スライダー */
+#comp-value-slider, #comp-freq-slider, #comp-phase-slider {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    background: transparent !important;
+    outline: none !important;
+    margin: 10px 0 !important;
+    width: 100% !important;
+}
+#comp-value-slider::-webkit-slider-runnable-track, #comp-freq-slider::-webkit-slider-runnable-track, #comp-phase-slider::-webkit-slider-runnable-track {
+    width: 100% !important;
+    height: 4px !important;
+    cursor: pointer !important;
+    background: var(--slider-track) !important;
+    border-radius: 2px !important;
+}
+#comp-value-slider::-webkit-slider-thumb, #comp-freq-slider::-webkit-slider-thumb, #comp-phase-slider::-webkit-slider-thumb {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 50% !important;
+    background-color: transparent !important;
+    background-image: var(--comp-slider-thumb-img) !important;
+    background-size: contain !important;
+    cursor: pointer !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5) !important;
+    transition: transform 0.1s !important;
+    margin-top: -15px !important;
+}
+#comp-value-slider::-webkit-slider-thumb:hover, #comp-freq-slider::-webkit-slider-thumb:hover, #comp-phase-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.1) !important;
+}
+#comp-value-slider::-moz-range-track, #comp-freq-slider::-moz-range-track, #comp-phase-slider::-moz-range-track {
+    width: 100% !important;
+    height: 4px !important;
+    cursor: pointer !important;
+    background: var(--slider-track) !important;
+    border-radius: 2px !important;
+}
+#comp-value-slider::-moz-range-thumb, #comp-freq-slider::-moz-range-thumb, #comp-phase-slider::-moz-range-thumb {
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 50% !important;
+    background-color: transparent !important;
+    background-image: var(--comp-slider-thumb-img) !important;
+    background-size: contain !important;
+    cursor: pointer !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5) !important;
+    transition: transform 0.1s !important;
+    border: none !important;
+}
+#comp-value-slider::-moz-range-thumb:hover, #comp-freq-slider::-moz-range-thumb:hover, #comp-phase-slider::-moz-range-thumb:hover {
+    transform: scale(1.1) !important;
+}
+
 /* モーダル */
 .modal {
     display: none;
@@ -267,11 +398,11 @@ body {
 #modal-cancel { background: #30363d; color: white; }
 #modal-save { background: var(--accent-color); color: white; }
 
-#comp-value {
+#comp-value, #comp-freq, #comp-phase {
     font-size: 24px;
     font-weight: bold;
     padding: 8px;
-    width: 140px;
+    width: 160px;
     text-align: right;
 }
 
@@ -340,7 +471,7 @@ input[type=range]::-moz-range-thumb {
     padding: 15px;
     color: var(--text-primary);
     max-height: 500px;
-    max-width: 350px;
+    width: 350px;
     overflow-y: auto;
     z-index: 100;
 }
@@ -364,6 +495,11 @@ input[type=range]::-moz-range-thumb {
 
 .results-panel tr:hover {
     background-color: rgba(255, 255, 255, 0.1);
+}
+
+.results-panel tr.selected-row {
+    background-color: rgba(255, 184, 198, 0.2) !important;
+    border-left: 3px solid #ffb8c6;
 }
 
 @keyframes pulse-glow {
@@ -404,4 +540,109 @@ input[type=range]::-moz-range-thumb {
 /* カスタムトグルアイコンの回転 */
 .custom-toggle-label input:checked + .toggle-icon svg {
     transform: rotateX(180deg);
+}
+
+/* グラフ専用スライダーのスタイル */
+#graph-v-range-slider, #graph-i-range-slider {
+    -webkit-appearance: none !important;
+    background: rgba(255,255,255,0.1) !important;
+    border-radius: 2px !important;
+    height: 4px !important;
+    outline: none !important;
+}
+
+#graph-v-range-slider::-webkit-slider-thumb {
+    -webkit-appearance: none !important;
+    width: 22px !important;
+    height: 22px !important;
+    background: #fab005 !important;
+    border-radius: 50% !important;
+    cursor: pointer !important;
+    box-shadow: 0 0 8px rgba(250, 176, 5, 0.6) !important;
+    border: 2px solid white !important;
+    margin-top: -9px !important;
+}
+
+#graph-i-range-slider::-webkit-slider-thumb {
+    -webkit-appearance: none !important;
+    width: 22px !important;
+    height: 22px !important;
+    background: #4dabf7 !important;
+    border-radius: 50% !important;
+    cursor: pointer !important;
+    box-shadow: 0 0 8px rgba(77, 171, 247, 0.6) !important;
+    border: 2px solid white !important;
+    margin-top: -9px !important;
+}
+
+#graph-v-range-slider::-moz-range-thumb, #graph-i-range-slider::-moz-range-thumb {
+    width: 22px !important;
+    height: 22px !important;
+    border: 2px solid white !important;
+    border-radius: 50% !important;
+    cursor: pointer !important;
+}
+#graph-v-range-slider::-moz-range-thumb { background: #fab005 !important; }
+#graph-i-range-slider::-moz-range-thumb { background: #4dabf7 !important; }
+
+/* 解析結果一覧表のハイライトマーカー（すべて背景グラデーション方式に統一してズレを防止） */
+.res-marker-solid, .res-marker-dashed, .res-marker-dotted, .res-marker-dashdot {
+    border-left: 4px solid transparent !important;
+    background-repeat: repeat-y !important;
+    background-origin: border-box !important;
+    background-position: left top !important;
+}
+
+.res-marker-solid {
+    background-image: linear-gradient(to bottom, var(--marker-color), var(--marker-color));
+    background-size: 4px 100%;
+}
+.res-marker-dashed {
+    background-image: repeating-linear-gradient(to bottom, var(--marker-color) 0, var(--marker-color) 10px, transparent 10px, transparent 15px);
+    background-size: 4px 15px;
+}
+.res-marker-dotted {
+    background-image: repeating-linear-gradient(to bottom, var(--marker-color) 0, var(--marker-color) 2px, transparent 2px, transparent 5px);
+    background-size: 4px 5px;
+}
+.res-marker-dashdot {
+    background-image: linear-gradient(to bottom, var(--marker-color) 0, var(--marker-color) 10px, transparent 10px, transparent 14px, var(--marker-color) 14px, var(--marker-color) 16px, transparent 16px, transparent 20px);
+    background-size: 4px 20px;
+}
+
+/* ライトモード専用: グラフパネルの背景色カスタマイズ */
+:root.light-mode #voltage-graph-panel {
+    background-color: #fff4e6 !important;
+    border: 1px solid #ffd8a8;
+}
+:root.light-mode #voltage-graph-panel h4 {
+    color: #e67e22 !important; /* 濃いめのオレンジ */
+}
+:root.light-mode #voltage-graph-panel span,
+:root.light-mode #voltage-graph-panel div {
+    color: #862e00 !important;
+}
+
+:root.light-mode #current-graph-panel {
+    background-color: #e7f5ff !important;
+    border: 1px solid #a5d8ff;
+}
+:root.light-mode #current-graph-panel h4 {
+    color: #3498db !important; /* 濃いめの水色 */
+}
+:root.light-mode #current-graph-panel span,
+:root.light-mode #current-graph-panel div {
+    color: #004d7a !important;
+}
+
+/* スライダのつまみ（ライトモード調整） */
+:root.light-mode #voltage-graph-panel input[type=range]::-webkit-slider-thumb {
+    background: #e67e22 !important;
+}
+:root.light-mode #current-graph-panel input[type=range]::-webkit-slider-thumb {
+    background: #3498db !important;
+}
+:root.light-mode #voltage-graph-panel input[type=range]::-webkit-slider-runnable-track,
+:root.light-mode #current-graph-panel input[type=range]::-webkit-slider-runnable-track {
+    background: rgba(0, 0, 0, 0.1) !important;
 }
