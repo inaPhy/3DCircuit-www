@@ -155,8 +155,11 @@
             </div>
         </header>
 
+        <!-- ツールバー設定用の背景オーバーレイ -->
+        <div id="toolbar-settings-backdrop" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:190;"></div>
+
         <!-- ツールバー表示設定パネル -->
-        <div id="toolbar-settings-panel" class="results-panel" style="display:none; top:90px; right:20px; width:220px; z-index:200;">
+        <div id="toolbar-settings-panel" class="results-panel" style="display:none; position: fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:240px; z-index:200;">
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--glass-border); padding-bottom:5px; margin-bottom:10px;">
                 <h4 style="margin:0; font-size:14px;">設定</h4>
                 <span id="close-toolbar-settings-btn" style="cursor:pointer; font-size:18px;">&times;</span>
@@ -174,7 +177,7 @@
 
             <!-- 表示設定 (BOTTOM) -->
             <div id="toolbar-visibility-list-container">
-                <h4 style="margin:0; font-size:14px; margin-bottom:8px;">表示設定</h4>
+                <h4 style="margin:0; font-size:14px; margin-bottom:8px;">ツールバー表示</h4>
                 <div id="toolbar-visibility-list" style="display:flex; flex-direction:column; gap:8px;">
                     <!-- JSで動的に生成 -->
                 </div>
@@ -208,10 +211,10 @@
                 <div class="footer-center" style="display: flex; align-items: center; gap: 20px;">
                 <!-- 速度 -->
                 <div style="display:flex; align-items:center; gap:5px;">
-                    <span style="color:var(--text-primary); font-size:12px; font-weight:bold;">slow</span>
+                    <span class="slider-label" style="color:var(--text-primary); font-size:12px; font-weight:bold;">slow</span>
                     <input type="range" id="time-scale-slider" min="0.001" max="1.0" step="0.001" value="0.1" style="width:120px;" class="custom-slider">
                     <span id="time-scale-val" style="display:none;">0.1x</span>
-                    <span style="color:var(--text-primary); font-size:12px; font-weight:bold;">fast</span>
+                    <span class="slider-label" style="color:var(--text-primary); font-size:12px; font-weight:bold;">fast</span>
                 </div>
                 
                 <!-- 絶対値切り替え (Checkbox) -->

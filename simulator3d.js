@@ -44,15 +44,15 @@ class Simulator3D {
         dirLight.position.set(100, -100, 500);
         this.scene.add(dirLight);
 
-        // Grid plane at Z=0
-        const gridHelper = new THREE.GridHelper(2000, 40, 0x000000, 0x000000);
-        gridHelper.material.opacity = 0.1;
-        gridHelper.material.transparent = true;
-        gridHelper.rotation.x = Math.PI / 2; 
-        this.scene.add(gridHelper);
+        // 動的グリッド用のグループ
+        this.gridLines = new THREE.Group();
+        this.scene.add(this.gridLines);
+        
+        this.GRID_SIZE_X = 11;
+        this.GRID_SIZE_Y = 7;
         
         // 電荷表示用のインスタンスメッシュ（最大2000個）
-        const particleGeo = new THREE.SphereGeometry(2, 6, 6);
+        const particleGeo = new THREE.SphereGeometry(4, 8, 8);
         const particleMat = new THREE.MeshBasicMaterial({ color: 0xfcc419 });
         this.particleMesh = new THREE.InstancedMesh(particleGeo, particleMat, 2000);
         this.particleMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -160,6 +160,7 @@ class Simulator3D {
     }
 
     update(components, simulationResults) {
+        this.updateGrid();
         if (!this.isActive || !this.scene || !simulationResults || !components) return;
 
         this.circuitComponents = components;
@@ -488,9 +489,13 @@ class Simulator3D {
         } else if (comp.type === 'battery') {
             ctx.moveTo(-64, 0); ctx.lineTo(-15, 0);
             ctx.moveTo(15, 0); ctx.lineTo(64, 0);
-            ctx.moveTo(-15, -30); ctx.lineTo(-15, 30);
-            ctx.moveTo(15, -16); ctx.lineTo(15, 16);
             ctx.stroke(); ctx.beginPath();
+            
+            ctx.lineWidth = 9; // 9pxに微調整
+            ctx.moveTo(-15, -30); ctx.lineTo(-15, 30); // 長い極板
+            ctx.moveTo(15, -16); ctx.lineTo(15, 16);   // 短い極板
+            ctx.stroke(); ctx.beginPath();
+            ctx.lineWidth = 6; // 元に戻す
         } else if (comp.type === 'ac_source') {
             ctx.moveTo(-64, 0); ctx.lineTo(-36, 0);
             ctx.moveTo(36, 0); ctx.lineTo(64, 0);
@@ -510,9 +515,14 @@ class Simulator3D {
             ctx.stroke(); ctx.beginPath();
         } else if (comp.type === 'capacitor') {
             ctx.moveTo(-64, 0); ctx.lineTo(-15, 0);
+            ctx.moveTo(15, 0); ctx.lineTo(64, 0);
+            ctx.stroke(); ctx.beginPath();
+            
+            ctx.lineWidth = 9; // 9pxに微調整
             ctx.moveTo(-15, -30); ctx.lineTo(-15, 30);
             ctx.moveTo(15, -30); ctx.lineTo(15, 30);
-            ctx.moveTo(15, 0); ctx.lineTo(64, 0);
+            ctx.stroke(); ctx.beginPath();
+            ctx.lineWidth = 6; // 元に戻す
         } else if (comp.type === 'switch') {
             ctx.moveTo(-64, 0); ctx.lineTo(-15, 0);
             ctx.moveTo(15, 0); ctx.lineTo(64, 0);
@@ -795,6 +805,47 @@ class Simulator3D {
             this.particleMesh.setMatrixAt(count, dummy.matrix);
         }
         this.particleMesh.instanceMatrix.needsUpdate = true;
+    }
+
+    updateGrid() {
+        if (!this.gridLines) return;
+        
+        // 既存の線をクリア
+        while(this.gridLines.children.length > 0) {
+            this.gridLines.remove(this.gridLines.children[0]);
+        }
+
+        const material = new THREE.LineBasicMaterial({ 
+            color: 0x000000, 
+            opacity: 0.1, 
+            transparent: true 
+        });
+
+        const points = [];
+        const scale = this.GRID_SCALE;
+        const gx = this.GRID_SIZE_X || 11;
+        const gy = this.GRID_SIZE_Y || 7;
+        const cx = this.cx || 0;
+        const cy = this.cy || 0;
+
+        // 垂直線
+        for (let i = 0; i <= gx; i++) {
+            const x = (i - cx) * scale;
+            points.push(new THREE.Vector3(x, cy * scale, 0));
+            points.push(new THREE.Vector3(x, -(gy - cy) * scale, 0));
+        }
+
+        // 水平線
+        for (let j = 0; j <= gy; j++) {
+            const y = -(j - cy) * scale;
+            points.push(new THREE.Vector3(-cx * scale, y, 0));
+            points.push(new THREE.Vector3((gx - cx) * scale, y, 0));
+        }
+
+        const geometry = new THREE.BufferGeometry().setFromPoints(points);
+        const lines = new THREE.LineSegments(geometry, material);
+        
+        this.gridLines.add(lines);
     }
 }
 

@@ -206,6 +206,8 @@ function updateCanvasSize() {
     
     if (typeof simulator3D !== 'undefined' && simulator3D) {
         simulator3D.GRID_SCALE = CELL_SIZE;
+        simulator3D.GRID_SIZE_X = GRID_SIZE_X; // 追加
+        simulator3D.GRID_SIZE_Y = GRID_SIZE_Y; // 追加
         if (simulator3D.isActive) {
             simulator3D.update(components, simulationResults);
         }
@@ -403,21 +405,29 @@ function setupEventListeners() {
         if (!header || !panel) return;
         let isDragging = false;
         let startX, startY, initX, initY;
-        header.addEventListener('mousedown', (e) => {
+        header.addEventListener('pointerdown', (e) => {
             if (e.target.tagName === 'SPAN') return;
             isDragging = true;
             startX = e.clientX; startY = e.clientY;
             initX = panel.offsetLeft; initY = panel.offsetTop;
+            header.setPointerCapture(e.pointerId);
             e.preventDefault();
         });
-        window.addEventListener('mousemove', (e) => {
+        header.addEventListener('pointermove', (e) => {
             if (isDragging) {
                 panel.style.left = `${initX + (e.clientX - startX)}px`;
                 panel.style.top = `${initY + (e.clientY - startY)}px`;
                 panel.style.right = 'auto';
             }
         });
-        window.addEventListener('mouseup', () => isDragging = false);
+        header.addEventListener('pointerup', (e) => {
+            isDragging = false;
+            header.releasePointerCapture(e.pointerId);
+        });
+        header.addEventListener('pointercancel', (e) => {
+            isDragging = false;
+            header.releasePointerCapture(e.pointerId);
+        });
     };
     setupDraggable('voltage-graph-header', 'voltage-graph-panel');
     setupDraggable('current-graph-header', 'current-graph-panel');
@@ -437,16 +447,17 @@ function setupEventListeners() {
     // Toolbar Settings
     const settingsBtn = document.getElementById('toolbar-settings-btn');
     const settingsPanel = document.getElementById('toolbar-settings-panel');
+    const settingsBackdrop = document.getElementById('toolbar-settings-backdrop');
     const closeSettingsBtn = document.getElementById('close-toolbar-settings-btn');
     const visibilityList = document.getElementById('toolbar-visibility-list');
 
-    if (settingsBtn && settingsPanel) {
-        settingsBtn.onclick = () => {
+    if (settingsBtn && settingsPanel && settingsBackdrop) {
+        settingsBtn.onclick = (e) => {
+            e.stopPropagation();
             const isHidden = settingsPanel.style.display === 'none';
             if (isHidden) {
-                // Populate list
                 visibilityList.innerHTML = '';
-                const items = document.querySelectorAll('.tool-item');
+                const items = document.querySelectorAll('.tool-item[data-type]');
                 items.forEach(item => {
                     const type = item.dataset.type;
                     const span = item.querySelector('span');
@@ -456,9 +467,15 @@ function setupEventListeners() {
                     const row = document.createElement('div');
                     row.style.display = 'flex';
                     row.style.alignItems = 'center';
-                    row.style.gap = '10px';
-                    row.style.fontSize = '13px';
+                    row.style.justifyContent = 'flex-start'; // 左詰め
+                    row.style.gap = '12px'; // スイッチと文字の間隔
+                    row.style.padding = '2px 0';
 
+                    // トグルスイッチの構築
+                    const switchLabel = document.createElement('label');
+                    switchLabel.className = 'switch';
+                    switchLabel.style.flexShrink = '0'; // スイッチが潰れないように
+                    
                     const cb = document.createElement('input');
                     cb.type = 'checkbox';
                     cb.checked = isVisible;
@@ -466,19 +483,47 @@ function setupEventListeners() {
                         item.style.display = cb.checked ? 'flex' : 'none';
                     };
 
+                    const slider = document.createElement('span');
+                    slider.className = 'slider-toggle';
+
+                    switchLabel.appendChild(cb);
+                    switchLabel.appendChild(slider);
+
                     const lbl = document.createElement('span');
                     lbl.innerText = label;
+                    lbl.style.fontSize = '13px';
                     lbl.style.cursor = 'pointer';
+
+                    // ラベルクリックでもスイッチが切り替わるようにする
                     lbl.onclick = () => { cb.checked = !cb.checked; cb.onchange(); };
 
-                    row.appendChild(cb);
+                    row.appendChild(switchLabel);
                     row.appendChild(lbl);
                     visibilityList.appendChild(row);
                 });
             }
             settingsPanel.style.display = isHidden ? 'block' : 'none';
+            settingsBackdrop.style.display = isHidden ? 'block' : 'none';
         };
-        if (closeSettingsBtn) closeSettingsBtn.onclick = () => settingsPanel.style.display = 'none';
+
+        const closePanel = () => {
+            settingsPanel.style.display = 'none';
+            settingsBackdrop.style.display = 'none';
+        };
+
+        if (closeSettingsBtn) closeSettingsBtn.onclick = closePanel;
+        if (settingsBackdrop) settingsBackdrop.onclick = closePanel;
+
+        // 背景クリックで閉じる処理（既存の window リスナーを整理）
+        window.addEventListener('pointerdown', (e) => {
+            if (settingsPanel.style.display !== 'none' && 
+                !settingsPanel.contains(e.target) && 
+                !settingsBtn.contains(e.target)) {
+                closePanel();
+            }
+        });
+
+        settingsPanel.addEventListener('pointerdown', (e) => e.stopPropagation());
     }
 
     // --- File Operations ---
@@ -2131,28 +2176,35 @@ let isDraggingResults = false;
 let dragStartX, dragStartY, initialPanelX, initialPanelY;
 
 if (resultsHeader && resultsPanel) {
-    resultsHeader.addEventListener('mousedown', (e) => {
+    resultsHeader.addEventListener('pointerdown', (e) => {
         if (e.target.id === 'close-results-btn') return;
         isDraggingResults = true;
         dragStartX = e.clientX;
         dragStartY = e.clientY;
         initialPanelX = resultsPanel.offsetLeft;
         initialPanelY = resultsPanel.offsetTop;
+        resultsHeader.setPointerCapture(e.pointerId);
         e.preventDefault();
     });
 
-    window.addEventListener('mousemove', (e) => {
+    resultsHeader.addEventListener('pointermove', (e) => {
         if (isDraggingResults) {
             const dx = e.clientX - dragStartX;
             const dy = e.clientY - dragStartY;
             resultsPanel.style.left = `${initialPanelX + dx}px`;
             resultsPanel.style.top = `${initialPanelY + dy}px`;
-            resultsPanel.style.right = 'auto'; // 右端固定を解除
+            resultsPanel.style.right = 'auto';
         }
     });
 
-    window.addEventListener('mouseup', () => {
+    resultsHeader.addEventListener('pointerup', (e) => {
         isDraggingResults = false;
+        resultsHeader.releasePointerCapture(e.pointerId);
+    });
+    
+    resultsHeader.addEventListener('pointercancel', (e) => {
+        isDraggingResults = false;
+        resultsHeader.releasePointerCapture(e.pointerId);
     });
 }
 

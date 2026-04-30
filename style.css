@@ -75,6 +75,7 @@ body {
     color: var(--text-primary);
     overflow: hidden;
     height: 100vh;
+    height: 100dvh;
     touch-action: none;
 }
 
@@ -82,6 +83,7 @@ body {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    height: 100dvh;
 }
 
 /* ツールバー */
@@ -506,6 +508,12 @@ input[type=range]::-moz-range-thumb {
     z-index: 100;
 }
 
+.results-panel div:first-child {
+    cursor: move;
+    user-select: none;
+    touch-action: none; /* タッチ操作時のブラウザ干渉を防止 */
+}
+
 .results-panel table {
     width: 100%;
     border-collapse: collapse;
@@ -695,4 +703,124 @@ input:checked + .toggle-icon .text-on { display: block; }
 :root.light-mode #voltage-graph-panel input[type=range]::-webkit-slider-runnable-track,
 :root.light-mode #current-graph-panel input[type=range]::-webkit-slider-runnable-track {
     background: rgba(0, 0, 0, 0.1) !important;
+}
+
+/* トグルスイッチのスタイル */
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 34px;
+  height: 20px;
+}
+
+.switch input { 
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider-toggle {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: .4s;
+  border-radius: 20px;
+}
+
+.slider-toggle:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider-toggle {
+  background-color: #007bff;
+}
+
+input:focus + .slider-toggle {
+  box-shadow: 0 0 1px #007bff;
+}
+
+input:checked + .slider-toggle:before {
+  transform: translateX(14px);
+}
+
+/* 設定ウィンドウを明るい白系に変更 */
+#toolbar-settings-panel {
+    background: #ffffff !important;
+    color: #333333 !important;
+    border: 1px solid #dddddd !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2) !important;
+}
+
+#toolbar-settings-panel h4 {
+    color: #000000 !important;
+}
+
+#toolbar-settings-panel span,
+#toolbar-settings-panel div {
+    color: #444444 !important;
+}
+
+#toolbar-settings-panel .ok-button#save-btn {
+    background-color: #ff5c7c !important;
+    color: white !important;
+}
+
+#toolbar-settings-panel #close-toolbar-settings-btn {
+    color: #999 !important;
+}
+#toolbar-settings-panel #close-toolbar-settings-btn:hover {
+    color: #333 !important;
+}
+
+/* スマホ縦画面向け UIの小型化設定 */
+@media (max-width: 600px) and (orientation: portrait) {
+    /* 実行・停止ボタンをさらに小型化 */
+    #solve-btn, #stop-btn {
+        padding: 8px 10px; /* 左右の余白をさらに削る */
+        font-size: 13px;    /* 文字をわずかに小さく */
+        min-width: 60px;   /* 80pxから60pxへ短縮 */
+    }
+
+    /* ゴミ箱の小型化 */
+    #trash-can {
+        width: 44px; /* さらに少し小型化 */
+        height: 44px;
+        margin: 0; /* 位置指定を解除しフッターに任せる */
+    }
+    #trash-can svg {
+        width: 20px;
+        height: 28px;
+    }
+
+    /* 速度スライダーと切り替えボタンの調整 */
+    .footer-center {
+        gap: 5px !important; /* !important を追加してインライン設定を上書き */
+    }
+    .custom-toggle-label {
+        gap: 2px !important; /* ボタン内のチェックボックスとアイコンの間隔も短縮 */
+    }
+    #time-scale-slider {
+        width: 80px !important; 
+    }
+    .slider-label {
+        display: none; 
+    }
+
+    /* モーダルのOKボタンなどの調整 */
+    .modal-content button {
+        padding: 8px 16px;
+        font-size: 14px;
+    }
 }
