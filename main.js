@@ -18,6 +18,7 @@ let graphAccumulatedTime = 0;
 const graphSampleInterval = 0.005;
 let graphRangeV = 10.0;
 let graphRangeI = 1.00;
+let showAbsoluteValues = true; // Default to ON as requested
 
 // Component Colors for Graphs (Sync with CSS variables --bg-xxx)
 const compColors = {
@@ -62,6 +63,7 @@ let appConfig = {
     showResults: true,
     show3D: true,
     darkMode: false,
+    showAbsoluteValues: true,
     toolbarVisibility: {} // Will be populated from settings.ini
 };
 
@@ -82,6 +84,7 @@ async function loadSettings() {
             if (key === 'showResults') appConfig.showResults = (value === 'true');
             if (key === 'show3D') appConfig.show3D = (value === 'true');
             if (key === 'darkMode') appConfig.darkMode = (value === 'true');
+            if (key === 'showAbsoluteValues') appConfig.showAbsoluteValues = (value === 'true');
             
             // Toolbar Visibility settings: show_battery, show_ac_source, etc.
             if (key.startsWith('show_')) {
@@ -113,6 +116,13 @@ function applySettings() {
         } else {
             document.documentElement.classList.add('light-mode');
         }
+    }
+
+    const absCheck = document.getElementById('abs-mode-checkbox');
+    if (absCheck) {
+        absCheck.checked = appConfig.showAbsoluteValues;
+        showAbsoluteValues = appConfig.showAbsoluteValues;
+        document.body.classList.toggle('abs-mode-active', showAbsoluteValues);
     }
 
     // Apply Toolbar Visibility from settings.ini
@@ -195,7 +205,19 @@ function setupEventListeners() {
                 simulator3D.update(components, simulationResults);
             }
             // グラフを再描画してテーマを即座に反映
-            if (selectedGraphCompId) updateDynamicUI(0);
+            if (selectedGraphCompIds.length > 0) updateDynamicUI(0);
+        });
+    }
+
+    // Absolute Value Toggle
+    const absModeCheckbox = document.getElementById('abs-mode-checkbox');
+    if (absModeCheckbox) {
+        absModeCheckbox.addEventListener('change', (e) => {
+            showAbsoluteValues = e.target.checked;
+            document.body.classList.toggle('abs-mode-active', showAbsoluteValues);
+            updateResultsTable();
+            updateGraphLegend();
+            render();
         });
     }
 
@@ -238,6 +260,14 @@ function setupEventListeners() {
         acPhaseInput.addEventListener('input', (e) => { acPhaseSlider.value = e.target.value; });
     }
 
+    // rInt sync
+    const rIntInput = document.getElementById('comp-rint');
+    const rIntSlider = document.getElementById('comp-rint-slider');
+    if (rIntInput && rIntSlider) {
+        rIntSlider.addEventListener('input', (e) => { rIntInput.value = e.target.value; });
+        rIntInput.addEventListener('input', (e) => { rIntSlider.value = e.target.value; });
+    }
+
     // Solve / Stop / Results
     solveBtn.addEventListener('click', toggleSimulation);
     const resCheckbox = document.getElementById('results-toggle-checkbox');
@@ -269,7 +299,7 @@ function setupEventListeners() {
     document.getElementById('modal-save').onclick = saveParams;
 
     const acToggleBtn = document.getElementById('modal-ac-toggle');
-    const acExtraGroup = document.getElementById('input-group-ac-extra');
+    const extraGroup = document.getElementById('input-group-extra');
     const mainNumGroup = document.getElementById('input-group-number');
     if (acToggleBtn) {
         acToggleBtn.onclick = () => {
@@ -278,7 +308,7 @@ function setupEventListeners() {
 
             let targetGroup;
             const saveBtn = document.getElementById('modal-save');
-            if (comp.type === 'ac_source') targetGroup = acExtraGroup;
+            if (comp.type === 'ac_source' || comp.type === 'battery') targetGroup = extraGroup;
             else if (comp.type === 'voltmeter' || comp.type === 'ammeter') {
                 targetGroup = mainNumGroup;
             }
@@ -297,12 +327,12 @@ function setupEventListeners() {
     // Graph Panel listeners
     document.getElementById('close-voltage-graph-btn').onclick = () => {
         document.getElementById('voltage-graph-panel').style.display = 'none';
-        if (document.getElementById('current-graph-panel').style.display === 'none') selectedGraphCompId = null;
+        if (document.getElementById('current-graph-panel').style.display === 'none') selectedGraphCompIds = [];
         updateResultsTable();
     };
     document.getElementById('close-current-graph-btn').onclick = () => {
         document.getElementById('current-graph-panel').style.display = 'none';
-        if (document.getElementById('voltage-graph-panel').style.display === 'none') selectedGraphCompId = null;
+        if (document.getElementById('voltage-graph-panel').style.display === 'none') selectedGraphCompIds = [];
         updateResultsTable();
     };
 
@@ -335,12 +365,12 @@ function setupEventListeners() {
     document.getElementById('graph-v-range-slider').oninput = (e) => {
         graphRangeV = parseFloat(e.target.value);
         document.getElementById('graph-v-range-val').innerText = graphRangeV.toFixed(1) + 'V';
-        if (selectedGraphCompId) updateDynamicUI(0); // Trigger redraw
+        if (selectedGraphCompIds.length > 0) updateDynamicUI(0); // Trigger redraw
     };
     document.getElementById('graph-i-range-slider').oninput = (e) => {
         graphRangeI = parseFloat(e.target.value);
         document.getElementById('graph-i-range-val').innerText = graphRangeI.toFixed(2) + 'A';
-        if (selectedGraphCompId) updateDynamicUI(0); // Trigger redraw
+        if (selectedGraphCompIds.length > 0) updateDynamicUI(0); // Trigger redraw
     };
 
     // Toolbar Settings
@@ -389,6 +419,99 @@ function setupEventListeners() {
         };
         if (closeSettingsBtn) closeSettingsBtn.onclick = () => settingsPanel.style.display = 'none';
     }
+
+    // --- File Operations ---
+    const saveBtn = document.getElementById('save-btn');
+    if (saveBtn) {
+        saveBtn.addEventListener('click', () => {
+            const toolbarVisibility = {};
+            document.querySelectorAll('.tool-item').forEach(item => {
+                toolbarVisibility[item.dataset.type] = item.style.display !== 'none';
+            });
+
+            const data = {
+                version: "1.1",
+                components: components,
+                settings: {
+                    darkMode: document.getElementById('dark-mode-checkbox').checked,
+                    absMode: document.getElementById('abs-mode-checkbox').checked,
+                    show3d: document.getElementById('show-3d-checkbox').checked,
+                    showParticles: document.getElementById('show-particles-checkbox').checked,
+                    showResults: document.getElementById('results-toggle-checkbox').checked,
+                    timeScale: parseFloat(document.getElementById('time-scale-slider').value),
+                    toolbarVisibility: toolbarVisibility
+                }
+            };
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_');
+            a.href = url;
+            a.download = `circuit_${timestamp}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+        });
+    }
+
+    const loadBtnTrigger = document.getElementById('load-btn-trigger');
+    const loadFileInput = document.getElementById('load-file-input');
+    if (loadBtnTrigger && loadFileInput) {
+        loadBtnTrigger.addEventListener('click', () => loadFileInput.click());
+        loadFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    if (!data.components) throw new Error("Invalid format");
+                    
+                    // Restore state
+                    components = data.components;
+                    if (data.settings) {
+                        const applyToggle = (id, value) => {
+                            const el = document.getElementById(id);
+                            if (el && el.checked !== (!!value)) {
+                                el.checked = !!value;
+                                el.dispatchEvent(new Event('change'));
+                            }
+                        };
+                        
+                        applyToggle('dark-mode-checkbox', data.settings.darkMode);
+                        applyToggle('abs-mode-checkbox', data.settings.absMode);
+                        applyToggle('show-3d-checkbox', data.settings.show3d);
+                        applyToggle('show-particles-checkbox', data.settings.showParticles);
+                        applyToggle('results-toggle-checkbox', data.settings.showResults);
+                        
+                        if (data.settings.timeScale !== undefined) {
+                            const slider = document.getElementById('time-scale-slider');
+                            if (slider) {
+                                slider.value = data.settings.timeScale;
+                                slider.dispatchEvent(new Event('input'));
+                            }
+                        }
+
+                        if (data.settings.toolbarVisibility) {
+                            document.querySelectorAll('.tool-item').forEach(item => {
+                                const type = item.dataset.type;
+                                if (data.settings.toolbarVisibility[type] !== undefined) {
+                                    item.style.display = data.settings.toolbarVisibility[type] ? 'flex' : 'none';
+                                }
+                            });
+                        }
+                    }
+                    
+                    render();
+                    if (isSimulating) toggleSimulation(); // Stop if running
+                    alert("回路と設定を読み込みました");
+                } catch (err) {
+                    alert("ファイルの読み込みに失敗しました: " + err.message);
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = ''; // Reset
+        });
+    }
 }
 
 function updateResultsTable() {
@@ -414,8 +537,18 @@ function updateResultsTable() {
     validComponents.forEach((c, idx) => {
         const tr = tbody.rows[idx];
         const { n1, n2 } = getCompNodeNames(c);
-        const volt = Math.abs(simulationResults.voltages[n1] - simulationResults.voltages[n2]) || 0;
-        const curr = Math.abs(simulationResults.currents[c.id] || 0);
+        let volt = (simulationResults.voltages[n1] || 0) - (simulationResults.voltages[n2] || 0);
+        let curr = simulationResults.currents[c.id] || 0;
+        
+        // 電池・交流電源の場合は電流の符号を反転（供給方向を正とする）
+        if (c.type === 'battery' || c.type === 'ac_source') {
+            curr = -curr;
+        } 
+        // 抵抗・電球・コンデンサ・コイルで絶対値モードがONの場合
+        else if (showAbsoluteValues && (c.type === 'resistor' || c.type === 'bulb' || c.type === 'capacitor' || c.type === 'inductor')) {
+            volt = Math.abs(volt);
+            curr = Math.abs(curr);
+        }
 
         const label = `${getLabel(c.type)} (${c.x},${c.y})`;
         if (tr.cells[0].innerText !== label) tr.cells[0].innerText = label;
@@ -424,6 +557,7 @@ function updateResultsTable() {
 
         // Highlight selected row with specific trace color and style
         const traceIndex = selectedGraphCompIds.indexOf(c.id);
+        const markerCell = tr.cells[0];
         if (traceIndex !== -1) {
             tr.classList.add('selected-row');
             const color = compColors[c.type] || '#888';
@@ -435,12 +569,7 @@ function updateResultsTable() {
                 if (prevComp && prevComp.type === c.type) sameTypeCount++;
             }
             
-            let borderStyle = 'solid';
-            if (sameTypeCount === 1) borderStyle = 'dashed';
-            else if (sameTypeCount === 2) borderStyle = 'dotted';
-            
             // Reset marker classes and styles
-            const markerCell = tr.cells[0];
             markerCell.classList.remove('res-marker-solid', 'res-marker-dashed', 'res-marker-dotted', 'res-marker-dashdot');
             markerCell.style.borderLeft = '';
             markerCell.style.backgroundImage = '';
@@ -452,7 +581,6 @@ function updateResultsTable() {
             else markerCell.classList.add('res-marker-dashdot');
         } else {
             tr.classList.remove('selected-row');
-            const markerCell = tr.cells[0];
             markerCell.classList.remove('res-marker-solid', 'res-marker-dashed', 'res-marker-dotted', 'res-marker-dashdot');
             markerCell.style.borderLeft = '';
             markerCell.style.backgroundImage = '';
@@ -761,6 +889,9 @@ function addComponent(type, x, y) {
     }[type];
 
     const initialComp = { id, type, x, y, rotation: 0, value: defaultValue };
+    if (type === 'battery' || type === 'ac_source') {
+        initialComp.rInt = 0.001;
+    }
     if (type === 'ac_source') {
         initialComp.freq = 1.0;
         initialComp.phase = 90.0;
@@ -790,7 +921,12 @@ function openEdit(id) {
         document.getElementById('modal-title').innerText = `${getLabel(comp.type)} の設定`;
         
         // Reset extra groups
-        document.getElementById('input-group-ac-extra').style.display = 'none';
+        const extraPanel = document.getElementById('input-group-extra');
+        if (extraPanel) extraPanel.style.display = 'none';
+        
+        const isMeter = (comp.type === 'voltmeter' || comp.type === 'ammeter');
+        const saveBtn = document.getElementById('modal-save');
+        const acToggleBtn = document.getElementById('modal-ac-toggle');
         
         if (comp.type === 'switch') {
             document.getElementById('input-group-number').style.display = 'none';
@@ -811,8 +947,14 @@ function openEdit(id) {
             // スライダーの設定
             const slider = document.getElementById('comp-value-slider');
             if (slider) {
-                const isMeter = (comp.type === 'voltmeter' || comp.type === 'ammeter');
                 slider.style.display = isMeter ? 'none' : 'block';
+                
+                if (isMeter) {
+                    document.getElementById('input-group-number').style.display = 'none';
+                    if (saveBtn) saveBtn.style.display = 'none';
+                } else {
+                    if (saveBtn) saveBtn.style.display = 'block';
+                }
                 
                 if (!isMeter) {
                     let min = 0, max = 100, step = 1;
@@ -828,36 +970,34 @@ function openEdit(id) {
                 }
             }
 
-            const acToggleBtn = document.getElementById('modal-ac-toggle');
-            const acExtra = document.getElementById('input-group-ac-extra');
-            const isMeter = (comp.type === 'voltmeter' || comp.type === 'ammeter');
-            const saveBtn = document.getElementById('modal-save');
-            
-            if (isMeter) {
-                document.getElementById('input-group-number').style.display = 'none'; // Default hidden
-                if (saveBtn) saveBtn.style.display = 'none'; // Also hide save button for meters initially
-                if (acToggleBtn) {
-                    acToggleBtn.style.display = 'block';
-                    acToggleBtn.style.transform = 'rotateX(0deg)';
-                }
-            } else {
-                if (saveBtn) saveBtn.style.display = 'block'; // Ensure save button is visible for others
-            }
+            const acFields = document.getElementById('extra-ac-only');
+            const rIntFields = document.getElementById('extra-rint-only');
+            const isBattery = (comp.type === 'battery');
+            const isAC = (comp.type === 'ac_source');
 
-            if (comp.type === 'ac_source') {
+            if (isBattery || isAC) {
                 if (acToggleBtn) {
                     acToggleBtn.style.display = 'block';
                     acToggleBtn.style.transform = 'rotateX(0deg)';
                 }
-                if (acExtra) acExtra.style.display = 'none'; // Default hidden as requested
+                if (extraPanel) extraPanel.style.display = 'none';
+                if (acFields) acFields.style.display = isAC ? 'block' : 'none';
+                if (rIntFields) rIntFields.style.display = 'block';
                 
-                document.getElementById('comp-freq').value = comp.freq || 1.0;
-                document.getElementById('comp-freq-slider').value = comp.freq || 1.0;
-                document.getElementById('comp-phase').value = (comp.phase !== undefined) ? comp.phase : 90.0;
-                document.getElementById('comp-phase-slider').value = (comp.phase !== undefined) ? comp.phase : 90.0;
+                // Initialize rInt values
+                const rInt = (comp.rInt !== undefined) ? comp.rInt : 0.001;
+                document.getElementById('comp-rint').value = rInt;
+                document.getElementById('comp-rint-slider').value = rInt;
+
+                if (isAC) {
+                    document.getElementById('comp-freq').value = comp.freq || 1.0;
+                    document.getElementById('comp-freq-slider').value = comp.freq || 1.0;
+                    document.getElementById('comp-phase').value = (comp.phase !== undefined) ? comp.phase : 90.0;
+                    document.getElementById('comp-phase-slider').value = (comp.phase !== undefined) ? comp.phase : 90.0;
+                }
             } else if (!isMeter) {
                 if (acToggleBtn) acToggleBtn.style.display = 'none';
-                if (acExtra) acExtra.style.display = 'none';
+                if (extraPanel) extraPanel.style.display = 'none';
             }
         }
         const bgType = comp.type.startsWith('wire') ? 'wire' : comp.type;
@@ -873,16 +1013,19 @@ function saveParams() {
             comp.value = parseInt(document.getElementById('comp-switch-val').value);
         } else {
             comp.value = Math.max(0, parseFloat(document.getElementById('comp-value').value) || 0);
-            if (comp.type === 'ac_source') {
-                comp.freq = parseFloat(document.getElementById('comp-freq').value) || 1.0;
-                comp.phase = parseFloat(document.getElementById('comp-phase').value);
-                if (isNaN(comp.phase)) comp.phase = 90.0;
+            if (comp.type === 'battery' || comp.type === 'ac_source') {
+                comp.rInt = parseFloat(document.getElementById('comp-rint').value) || 0.001;
+                if (comp.type === 'ac_source') {
+                    comp.freq = parseFloat(document.getElementById('comp-freq').value) || 1.0;
+                    comp.phase = parseFloat(document.getElementById('comp-phase').value);
+                    if (isNaN(comp.phase)) comp.phase = 90.0;
+                }
             }
         }
     }
     paramModal.style.display = 'none';
     if (isSimulating) {
-        runSimulation();
+        activeNetlist = buildNetlist();
     }
     render();
 }
@@ -1027,7 +1170,7 @@ function render() {
                 e.stopPropagation(); // prevent panel dragging or editing
                 comp.value = comp.value === 1 ? 0 : 1;
                 if (isSimulating) {
-                    runSimulation();
+                    activeNetlist = buildNetlist();
                 }
                 render();
             });
@@ -1140,10 +1283,10 @@ function updateDynamicUI(currentDt) {
         if (txt && simulationResults && simulationResults.success) {
             if (comp.type === 'voltmeter') {
                 const { n1, n2 } = getCompNodeNames(comp);
-                const volt = Math.abs((simulationResults.voltages[n1] || 0) - (simulationResults.voltages[n2] || 0));
+                const volt = (simulationResults.voltages[n1] || 0) - (simulationResults.voltages[n2] || 0);
                 txt.textContent = `${volt.toFixed(2)}V`;
             } else if (comp.type === 'ammeter') {
-                const curr = Math.abs(simulationResults.currents[comp.id] || 0);
+                const curr = simulationResults.currents[comp.id] || 0;
                 txt.textContent = `${curr.toFixed(3)}A`;
             }
         }
@@ -1163,7 +1306,10 @@ function updateDynamicUI(currentDt) {
             validComponents.forEach(comp => {
                 const { n1, n2 } = getCompNodeNames(comp);
                 const v = (simulationResults.voltages[n1] || 0) - (simulationResults.voltages[n2] || 0);
-                const i = simulationResults.currents[comp.id] || 0;
+                let i = simulationResults.currents[comp.id] || 0;
+                if (comp.type === 'battery' || comp.type === 'ac_source') {
+                    i = -i;
+                }
                 entry.voltages[comp.id] = v;
                 entry.currents[comp.id] = i;
             });
@@ -1237,8 +1383,19 @@ function updateGraphLegend() {
             return div;
         };
 
-        const vVal = lastEntry ? (lastEntry.voltages[compId] || 0).toFixed(2) + 'V' : '--';
-        const iVal = lastEntry ? (lastEntry.currents[compId] || 0).toFixed(3) + 'A' : '--';
+        let vNum = lastEntry ? (lastEntry.voltages[compId] || 0) : null;
+        let iNum = lastEntry ? (lastEntry.currents[compId] || 0) : null;
+
+        if (vNum !== null && iNum !== null) {
+            // 抵抗・電球・コンデンサ・コイルで絶対値モードがONの場合
+            if (showAbsoluteValues && (comp.type === 'resistor' || comp.type === 'bulb' || comp.type === 'capacitor' || comp.type === 'inductor')) {
+                vNum = Math.abs(vNum);
+                iNum = Math.abs(iNum);
+            }
+        }
+
+        const vVal = vNum !== null ? vNum.toFixed(2) + 'V' : '--';
+        const iVal = iNum !== null ? iNum.toFixed(3) + 'A' : '--';
 
         vLegend.appendChild(createItem(color, sameTypeCount, vVal));
         iLegend.appendChild(createItem(color, sameTypeCount, iVal));
@@ -1309,8 +1466,13 @@ function drawGraph(canvasId, prop, maxVal) {
         
         for (let idx = 0; idx < globalGraphHistory.length; idx++) {
             const x = (idx / (maxGraphHistory - 1)) * w;
-            const val = globalGraphHistory[idx][dataKey][compId];
+            let val = globalGraphHistory[idx][dataKey][compId];
             if (val === undefined) continue;
+
+            // Apply absolute value if toggle is on for passive components
+            if (showAbsoluteValues && (comp.type === 'resistor' || comp.type === 'bulb' || comp.type === 'capacitor' || comp.type === 'inductor')) {
+                val = Math.abs(val);
+            }
 
             const y = h/2 - (val / maxVal) * (h * 0.4); 
             if (idx === 0) ctx.moveTo(x, y);
@@ -1561,6 +1723,7 @@ function drawComponentVisual(comp) {
             plates.setAttribute('fill', 'none');
             plates.setAttribute('stroke-linecap', 'round');
             g.appendChild(plates);
+            g.appendChild(path);
             break;
         case 'ac_source':
             path.setAttribute('d', 'M -30,0 L -18,0 M 18,0 L 30,0');
@@ -1572,6 +1735,7 @@ function drawComponentVisual(comp) {
             wave.setAttribute('d', 'M -10,0 C -10,-6 -5,-6 0,0 C 5,6 10,6 10,0');
             wave.setAttribute('stroke', color); wave.setAttribute('stroke-width', '2'); wave.setAttribute('fill', 'none');
             g.appendChild(acCircle); g.appendChild(wave);
+            g.appendChild(path);
             break;
         case 'resistor':
             path.setAttribute('d', 'M -30,0 L -15,0 M 15,0 L 30,0');
@@ -1579,18 +1743,23 @@ function drawComponentVisual(comp) {
             rect.setAttribute('x', -15); rect.setAttribute('y', -7);
             rect.setAttribute('width', 30); rect.setAttribute('height', 14);
             rect.setAttribute('fill', 'var(--inner-fill)'); rect.setAttribute('stroke', color); rect.setAttribute('stroke-width', '2');
-            g.appendChild(path); g.appendChild(rect);
+            g.appendChild(rect);
+            g.appendChild(path);
+            addPassivePolarity(g, color);
             return g;
         case 'wire':
             path.setAttribute('d', 'M -30,0 L 30,0');
+            g.appendChild(path);
             break;
         case 'wire_l':
             path.setAttribute('d', 'M 0,-30 L 0,0 L 30,0');
+            g.appendChild(path);
             break;
         case 'wire_t':
             path.setAttribute('d', 'M -30,0 L 30,0 M 0,0 L 0,30');
             const tDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             tDot.setAttribute('cx', 0); tDot.setAttribute('cy', 0); tDot.setAttribute('r', 2); tDot.setAttribute('fill', color);
+            g.appendChild(path);
             g.appendChild(tDot);
             break;
         case 'bulb':
@@ -1603,6 +1772,8 @@ function drawComponentVisual(comp) {
             bulbLight.setAttribute('cx', 0); bulbLight.setAttribute('cy', 0); bulbLight.setAttribute('r', 14);
             bulbLight.setAttribute('fill', `rgba(255, 255, 0, ${Math.min(bulbIntensity * 0.5, 0.8)})`);
             g.appendChild(circle); g.appendChild(bulbLight);
+            g.appendChild(path);
+            addPassivePolarity(g, color);
             break;
         case 'capacitor':
             path.setAttribute('d', 'M -30,0 L -6,0 M 6,0 L 30,0');
@@ -1614,9 +1785,13 @@ function drawComponentVisual(comp) {
             cPlates.setAttribute('fill', 'none');
             cPlates.setAttribute('stroke-linecap', 'round');
             g.appendChild(cPlates);
+            g.appendChild(path);
+            addPassivePolarity(g, color);
             break;
         case 'inductor':
             path.setAttribute('d', 'M -30,0 L -15,0 M 15,0 L 30,0 M -15,0 C -15,-10 -7.5,-10 -7.5,0 C -7.5,-10 0,-10 0,0 C 0,-10 7.5,-10 7.5,0 C 7.5,-10 15,-10 15,0');
+            g.appendChild(path);
+            addPassivePolarity(g, color);
             break;
         case 'voltmeter':
             path.setAttribute('d', 'M -30,0 L -14,0 M 14,0 L 30,0');
@@ -1629,8 +1804,19 @@ function drawComponentVisual(comp) {
             vText.setAttribute('text-anchor', 'middle'); vText.setAttribute('font-size', '14px');
             vText.setAttribute('font-weight', 'bold'); vText.setAttribute('fill', color);
             if (comp.rotation) vText.setAttribute('transform', `rotate(${-comp.rotation * 90})`);
+            
             g.appendChild(vCircle); g.appendChild(vText);
-            break;
+            g.appendChild(path); // Wires on top of circle
+            
+            // Polarity terminals (Front, slightly inside to fit in panel)
+            const vPos = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            vPos.setAttribute('cx', -26); vPos.setAttribute('cy', 0); vPos.setAttribute('r', 4);
+            vPos.setAttribute('fill', '#ff0000'); vPos.setAttribute('stroke', color); vPos.setAttribute('stroke-width', '1');
+            const vNeg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            vNeg.setAttribute('cx', 26); vNeg.setAttribute('cy', 0); vNeg.setAttribute('r', 4);
+            vNeg.setAttribute('fill', '#777777'); vNeg.setAttribute('stroke', color); vNeg.setAttribute('stroke-width', '1');
+            g.appendChild(vPos); g.appendChild(vNeg);
+            return g;
         case 'ammeter':
             path.setAttribute('d', 'M -30,0 L -14,0 M 14,0 L 30,0');
             const aCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
@@ -1642,8 +1828,19 @@ function drawComponentVisual(comp) {
             aText.setAttribute('text-anchor', 'middle'); aText.setAttribute('font-size', '14px');
             aText.setAttribute('font-weight', 'bold'); aText.setAttribute('fill', color);
             if (comp.rotation) aText.setAttribute('transform', `rotate(${-comp.rotation * 90})`);
+            
             g.appendChild(aCircle); g.appendChild(aText);
-            break;
+            g.appendChild(path); // Wires on top of circle
+            
+            // Polarity terminals (Front, slightly inside to fit in panel)
+            const aPos = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            aPos.setAttribute('cx', -26); aPos.setAttribute('cy', 0); aPos.setAttribute('r', 4);
+            aPos.setAttribute('fill', '#ff0000'); aPos.setAttribute('stroke', color); aPos.setAttribute('stroke-width', '1');
+            const aNeg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            aNeg.setAttribute('cx', 26); aNeg.setAttribute('cy', 0); aNeg.setAttribute('r', 4);
+            aNeg.setAttribute('fill', '#777777'); aNeg.setAttribute('stroke', color); aNeg.setAttribute('stroke-width', '1');
+            g.appendChild(aPos); g.appendChild(aNeg);
+            return g;
         case 'switch':
             const s1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             s1.setAttribute('cx', -10); s1.setAttribute('cy', 0); s1.setAttribute('r', 2); s1.setAttribute('fill', color);
@@ -1657,10 +1854,27 @@ function drawComponentVisual(comp) {
             } else {
                 path.setAttribute('d', 'M -30,0 L -10,0 M -10,0 L 10,-10 M 10,0 L 30,0');
             }
+            g.appendChild(path);
             break;
     }
-    g.appendChild(path);
     return g;
+}
+
+function addPassivePolarity(g, color) {
+    if (showAbsoluteValues) return;
+    
+    const pos = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    pos.setAttribute('cx', -26); pos.setAttribute('cy', 0); pos.setAttribute('r', 4);
+    pos.setAttribute('fill', '#ff0000'); pos.setAttribute('stroke', color); pos.setAttribute('stroke-width', '1');
+    pos.classList.add('passive-polarity');
+    
+    const neg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    neg.setAttribute('cx', 26); neg.setAttribute('cy', 0); neg.setAttribute('r', 4);
+    neg.setAttribute('fill', '#777777'); neg.setAttribute('stroke', color); neg.setAttribute('stroke-width', '1');
+    neg.classList.add('passive-polarity');
+    
+    g.appendChild(pos);
+    g.appendChild(neg);
 }
 
 function addRotationZones(group, id) {
@@ -1735,9 +1949,12 @@ function buildNetlist() {
             else { n1 = bottom; n2 = top; }
             
             const netItem = { id: c.id, type: c.type, nodes: [n1, n2], value: c.value };
-            if (c.type === 'ac_source') {
-                netItem.freq = c.freq;
-                netItem.phase = c.phase;
+            if (c.type === 'battery' || c.type === 'ac_source') {
+                netItem.rInt = c.rInt;
+                if (c.type === 'ac_source') {
+                    netItem.freq = c.freq;
+                    netItem.phase = c.phase;
+                }
             }
             netlist.push(netItem);
         }

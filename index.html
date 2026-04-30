@@ -39,6 +39,9 @@
                         <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
                             <path d="M -30,0 L -15,0 M 15,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" />
                             <rect x="-15" y="-7" width="30" height="14" fill="var(--inner-fill)" stroke="currentColor" stroke-width="2" />
+                            <!-- Polarity terminals (Inside panel) -->
+                            <circle class="passive-polarity" cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                            <circle class="passive-polarity" cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
                         </svg>
                     </div>
                     <span>抵抗</span>
@@ -48,6 +51,9 @@
                         <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
                             <circle cx="0" cy="0" r="14" fill="var(--inner-fill)" stroke="currentColor" stroke-width="2" />
                             <path d="M -9.9,-9.9 L 9.9,9.9 M -9.9,9.9 L 9.9,-9.9 M -30,0 L -14,0 M 14,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" />
+                            <!-- Polarity terminals (Inside panel) -->
+                            <circle class="passive-polarity" cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                            <circle class="passive-polarity" cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
                         </svg>
                     </div>
                     <span>電球</span>
@@ -57,6 +63,9 @@
                         <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
                             <path d="M -30,0 L -6,0 M 6,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
                             <path d="M -6,-15 L -6,15 M 6,-15 L 6,15" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round" />
+                            <!-- Polarity terminals (Inside panel) -->
+                            <circle class="passive-polarity" cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                            <circle class="passive-polarity" cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
                         </svg>
                     </div>
                     <span>コンデンサー</span>
@@ -65,6 +74,9 @@
                     <div class="icon-box" style="background-color: var(--bg-inductor);">
                         <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
                             <path d="M -30,0 L -15,0 M 15,0 L 30,0 M -15,0 C -15,-10 -7.5,-10 -7.5,0 C -7.5,-10 0,-10 0,0 C 0,-10 7.5,-10 7.5,0 C 7.5,-10 15,-10 15,0" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <!-- Polarity terminals (Inside panel) -->
+                            <circle class="passive-polarity" cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                            <circle class="passive-polarity" cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
                         </svg>
                     </div>
                     <span>コイル</span>
@@ -72,9 +84,12 @@
                 <div class="tool-item" data-type="voltmeter" title="電圧計">
                     <div class="icon-box" style="background-color: var(--bg-voltmeter);">
                         <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
-                            <path d="M -30,0 L -14,0 M 14,0 L 30,0" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <path d="M -26,0 L -14,0 M 14,0 L 26,0" fill="none" stroke="currentColor" stroke-width="2"/>
                             <circle cx="0" cy="0" r="14" fill="var(--inner-fill)" stroke="currentColor" stroke-width="2"/>
                             <text x="0" y="0" dominant-baseline="central" text-anchor="middle" font-size="14px" font-weight="bold" fill="currentColor" stroke="none">V</text>
+                            <!-- Polarity terminals (Inside panel) -->
+                            <circle cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                            <circle cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
                         </svg>
                     </div>
                     <span>電圧計</span>
@@ -82,9 +97,12 @@
                 <div class="tool-item" data-type="ammeter" title="電流計">
                     <div class="icon-box" style="background-color: var(--bg-ammeter);">
                         <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
-                            <path d="M -30,0 L -14,0 M 14,0 L 30,0" fill="none" stroke="currentColor" stroke-width="2"/>
+                            <path d="M -26,0 L -14,0 M 14,0 L 26,0" fill="none" stroke="currentColor" stroke-width="2"/>
                             <circle cx="0" cy="0" r="14" fill="var(--inner-fill)" stroke="currentColor" stroke-width="2"/>
                             <text x="0" y="0" dominant-baseline="central" text-anchor="middle" font-size="14px" font-weight="bold" fill="currentColor" stroke="none">A</text>
+                            <!-- Polarity terminals (Inside panel) -->
+                            <circle cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                            <circle cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
                         </svg>
                     </div>
                     <span>電流計</span>
@@ -138,11 +156,26 @@
         <!-- ツールバー表示設定パネル -->
         <div id="toolbar-settings-panel" class="results-panel" style="display:none; top:90px; right:20px; width:220px; z-index:200;">
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--glass-border); padding-bottom:5px; margin-bottom:10px;">
-                <h4 style="margin:0; font-size:14px;">表示設定</h4>
+                <h4 style="margin:0; font-size:14px;">設定</h4>
                 <span id="close-toolbar-settings-btn" style="cursor:pointer; font-size:18px;">&times;</span>
             </div>
-            <div id="toolbar-visibility-list" style="display:flex; flex-direction:column; gap:8px;">
-                <!-- JSで動的に生成 -->
+            
+            <!-- ファイル操作 (TOP) -->
+            <div style="padding-bottom:12px; margin-bottom:12px; border-bottom:1px solid var(--glass-border);">
+                <h4 style="margin:0; font-size:14px; margin-bottom:8px;">ファイル</h4>
+                <div style="display:flex; gap:10px;">
+                    <button id="save-btn" class="ok-button" style="flex:1; padding: 8px; font-size: 13px; height: auto; background-color: #ff5c7c;">保存</button>
+                    <button id="load-btn-trigger" class="ok-button" style="flex:1; padding: 8px; font-size: 13px; height: auto; background-color: var(--glass-bg); color: var(--text-primary); border: 1px solid var(--glass-border);">開く</button>
+                </div>
+                <input type="file" id="load-file-input" style="display: none;" accept=".json">
+            </div>
+
+            <!-- 表示設定 (BOTTOM) -->
+            <div id="toolbar-visibility-list-container">
+                <h4 style="margin:0; font-size:14px; margin-bottom:8px;">表示設定</h4>
+                <div id="toolbar-visibility-list" style="display:flex; flex-direction:column; gap:8px;">
+                    <!-- JSで動的に生成 -->
+                </div>
             </div>
         </div>
 
@@ -179,6 +212,20 @@
                     <span style="color:var(--text-primary); font-size:12px; font-weight:bold;">fast</span>
                 </div>
                 
+                <!-- 絶対値切り替え (Checkbox) -->
+                <label class="custom-toggle-label" style="display:flex; cursor:pointer; align-items:center; gap:5px;" title="絶対値・正負号">
+                    <input type="checkbox" id="abs-mode-checkbox" style="display:none;" checked>
+                    <div class="toggle-icon">
+                        <svg viewBox="0 0 30 30" width="24" height="24" style="transition: transform 0.3s; border-radius: 4px; display: block;">
+                            <rect x="1" y="1" width="28" height="28" fill="#ced4da" stroke="#333" stroke-width="2" rx="2" />
+                            <!-- OFF state text: ± -->
+                            <text class="text-off" x="15" y="15" dominant-baseline="central" text-anchor="middle" font-size="16px" font-weight="bold" fill="#333" pointer-events="none">±</text>
+                            <!-- ON state text: ABS (inverted so it looks correct when flipped) -->
+                            <text class="text-on" x="15" y="-15" dominant-baseline="central" text-anchor="middle" font-size="8px" font-weight="bold" fill="#333" pointer-events="none" transform="scale(1,-1)">ABS</text>
+                        </svg>
+                    </div>
+                </label>
+
                 <!-- ダークモード (Checkbox) -->
                 <label class="custom-toggle-label" style="display:flex; cursor:pointer; align-items:center; gap:5px;" title="ダークモード">
                     <input type="checkbox" id="dark-mode-checkbox" style="display:none;">
@@ -213,7 +260,7 @@
                 </label>
 
                 <!-- 結果一覧 (Toggle) -->
-                <label class="custom-toggle-label" id="results-toggle-container" style="display:none; cursor:pointer; align-items:center; gap:5px;" title="結果一覧">
+                <label class="custom-toggle-label" id="results-toggle-container" style="display:none; cursor:pointer; align-items:center; gap:5px;" title="解析結果">
                     <input type="checkbox" id="results-toggle-checkbox" style="display:none;">
                     <div class="toggle-icon">
                         <svg viewBox="0 0 30 30" width="24" height="24" style="transition: transform 0.3s; border-radius: 4px; display: block;">
@@ -263,8 +310,9 @@
                         <input type="range" id="comp-value-slider" step="any" style="width: 100%;">
                     </div>
                 </div>
-                <div class="input-group" id="input-group-ac-extra" style="display: none; margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 15px;">
-                    <label for="comp-freq" style="display: block; margin-bottom: 5px; font-size: 14px; color: var(--text-secondary);">周波数:</label>
+                <div class="input-group" id="input-group-extra" style="display: none; margin-top: 20px; border-top: 1px solid var(--glass-border); padding-top: 15px;">
+                    <div id="extra-ac-only">
+                        <label for="comp-freq" style="display: block; margin-bottom: 5px; font-size: 14px; color: var(--text-secondary);">周波数:</label>
                     <div style="display: flex; flex-direction: column; align-items: center; gap: 15px; margin-bottom: 15px;">
                         <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
                             <input type="number" id="comp-freq" step="0.1" min="0.1" max="10">
@@ -279,6 +327,18 @@
                             <span style="font-size: 18px; font-weight: bold;">°</span>
                         </div>
                         <input type="range" id="comp-phase-slider" step="1" min="0" max="360" style="width: 100%;">
+                    </div>
+                    </div>
+                    <!-- 内部抵抗 (電池・交流電源共通) -->
+                    <div id="extra-rint-only" style="margin-top: 15px;">
+                        <label for="comp-rint" style="display: block; margin-bottom: 5px; font-size: 14px; color: var(--text-secondary);">内部抵抗:</label>
+                        <div style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <input type="number" id="comp-rint" step="0.001" min="0.001" max="10">
+                                <span style="font-size: 18px; font-weight: bold;">Ω</span>
+                            </div>
+                            <input type="range" id="comp-rint-slider" step="0.001" min="0.001" max="1" style="width: 100%;">
+                        </div>
                     </div>
                 </div>
                 <div class="input-group" id="input-group-switch" style="display: none; margin-top: 5px;">

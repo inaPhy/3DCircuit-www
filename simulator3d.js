@@ -297,11 +297,31 @@ class Simulator3D {
             const y1 = -(comp.y + 1 - this.cy) * this.GRID_SCALE;  // BOTTOM EDGE (Smaller Y)
 
             let profile = [];
-            // 電池とコンデンサーとスイッチは垂直に切り立つ崖（Cliff）を表現
-            if (['battery', 'capacitor', 'switch'].includes(comp.type)) {
+            if (['battery', 'ac_source'].includes(comp.type)) {
+                const i = simulationResults.currents[comp.id] || 0;
+                const rInt = (comp.rInt !== undefined) ? comp.rInt : 0.001;
+                const vIr = i * rInt;
+                
+                if (comp.type === 'battery') {
+                    const emf = parseFloat(comp.value) || 0;
+                    if (comp.rotation === 0 || comp.rotation === 1) {
+                        // vStart: Pos, vEnd: Neg. Peak is always vEnd + EMF
+                        profile = [ [0, vStart], [0.5, vEnd + emf], [0.51, vEnd], [1, vEnd] ];
+                    } else {
+                        // vStart: Neg, vEnd: Pos. Peak is always vStart + EMF
+                        profile = [ [0, vStart], [0.49, vStart], [0.5, vStart + emf], [1, vEnd] ];
+                    }
+                } else {
+                    // ac_source stays relative to handle animation
+                    if (comp.rotation === 0 || comp.rotation === 1) {
+                        profile = [ [0, vStart], [0.5, vStart - vIr], [0.51, vEnd], [1, vEnd] ];
+                    } else {
+                        profile = [ [0, vStart], [0.49, vStart], [0.5, vEnd - vIr], [1, vEnd] ];
+                    }
+                }
+            } else if (['capacitor', 'switch'].includes(comp.type)) {
                 profile = [ [0, vStart], [0.49, vStart], [0.51, vEnd], [1, vEnd] ];
             } else {
-                // 抵抗などはなだらかな斜面
                 profile = [ [0, vStart], [1, vEnd] ];
             }
 
@@ -476,10 +496,10 @@ class Simulator3D {
             ctx.moveTo(36, 0); ctx.lineTo(64, 0);
             ctx.stroke(); ctx.beginPath();
             
-            ctx.fillStyle = isDarkMode ? 'transparent' : '#ffffff';
+            ctx.fillStyle = '#ffffff';
             ctx.lineWidth = 8; // わずかに細く (10 から 8 へ)
             ctx.arc(0, 0, 36, 0, Math.PI*2);
-            if (!isDarkMode) ctx.fill();
+            ctx.fill();
             ctx.stroke(); ctx.beginPath();
 
             ctx.lineWidth = 6; // 波は元の太さに戻す
@@ -720,12 +740,6 @@ class Simulator3D {
                     }
                 }
             } else {
-                // 一般的な素子
-                let v1, v2;
-                if (comp.rotation === 0) { v1 = getV(leftNode); v2 = getV(rightNode); }
-                else if (comp.rotation === 1) { v1 = getV(topNode); v2 = getV(bottomNode); }
-                else if (comp.rotation === 2) { v1 = getV(rightNode); v2 = getV(leftNode); }
-                else { v1 = getV(bottomNode); v2 = getV(topNode); }
                 const num = 4;
                 for (let p = 0; p < num; p++) {
                     if (count >= 2000) break;
@@ -736,11 +750,34 @@ class Simulator3D {
                     else if (comp.rotation === 2) { lx = 0.5 - prog; ly = 0; }
                     else { lx = 0; ly = -0.5 + prog; }
 
+                    // Unified coordinate system: vPos is always n1, vNeg is always n2
+                    // prog=0 is n1(Pos), prog=1 is n2(Neg)
+                    let vPos, vNeg;
+                    if (comp.rotation === 0) { vPos = getV(leftNode); vNeg = getV(rightNode); }
+                    else if (comp.rotation === 1) { vPos = getV(topNode); vNeg = getV(bottomNode); }
+                    else if (comp.rotation === 2) { vPos = getV(rightNode); vNeg = getV(leftNode); }
+                    else { vPos = getV(bottomNode); vNeg = getV(topNode); }
+
                     let z = 0;
-                    if (['battery', 'switch'].includes(comp.type)) {
-                        z = (prog < 0.5 ? v1 : v2);
+                    if (comp.type === 'battery') {
+                        const emf = parseFloat(comp.value) || 0;
+                        const vPeak = vNeg + emf;
+                        // prog 0(Pos)..1(Neg)
+                        if (prog < 0.5) z = vPos + (vPeak - vPos) * (prog / 0.5); // Peak to Pos slope
+                        else if (prog < 0.51) z = vPeak; // Jump
+                        else z = vNeg; // Neg side
+                    } else if (comp.type === 'ac_source') {
+                        const i = simulationResults.currents[comp.id] || 0;
+                        const rInt = (comp.rInt !== undefined) ? comp.rInt : 0.001;
+                        const vIr = i * rInt;
+                        const vPeak = vPos - vIr;
+                        if (prog < 0.5) z = vPos + (vPeak - vPos) * (prog / 0.5);
+                        else if (prog < 0.51) z = vPeak;
+                        else z = vNeg;
+                    } else if (comp.type === 'switch') {
+                        z = (prog < 0.5 ? vPos : vNeg);
                     } else {
-                        z = v1 + (v2 - v1) * prog;
+                        z = vPos + (vNeg - vPos) * prog;
                     }
                     z = (z - minV) * this.Z_SCALE;
 

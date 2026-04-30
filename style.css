@@ -304,8 +304,30 @@ body {
 }
 
 /* パラメータ編集用スライダー */
-/* パラメータ編集用スライダー */
-#comp-value-slider, #comp-freq-slider, #comp-phase-slider {
+.file-btn {
+    cursor: pointer;
+    padding: 8px;
+    color: var(--text-secondary);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: transparent;
+}
+
+.file-btn:hover {
+    color: var(--accent-primary);
+    background: var(--glass-bg);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.file-btn:active {
+    transform: translateY(1px) scale(0.95);
+}
+
+#comp-value-slider, #comp-freq-slider, #comp-phase-slider, #comp-rint-slider {
     -webkit-appearance: none !important;
     appearance: none !important;
     background: transparent !important;
@@ -313,14 +335,14 @@ body {
     margin: 10px 0 !important;
     width: 100% !important;
 }
-#comp-value-slider::-webkit-slider-runnable-track, #comp-freq-slider::-webkit-slider-runnable-track, #comp-phase-slider::-webkit-slider-runnable-track {
+#comp-value-slider::-webkit-slider-runnable-track, #comp-freq-slider::-webkit-slider-runnable-track, #comp-phase-slider::-webkit-slider-runnable-track, #comp-rint-slider::-webkit-slider-runnable-track {
     width: 100% !important;
     height: 4px !important;
     cursor: pointer !important;
     background: var(--slider-track) !important;
     border-radius: 2px !important;
 }
-#comp-value-slider::-webkit-slider-thumb, #comp-freq-slider::-webkit-slider-thumb, #comp-phase-slider::-webkit-slider-thumb {
+#comp-value-slider::-webkit-slider-thumb, #comp-freq-slider::-webkit-slider-thumb, #comp-phase-slider::-webkit-slider-thumb, #comp-rint-slider::-webkit-slider-thumb {
     -webkit-appearance: none !important;
     appearance: none !important;
     width: 34px !important;
@@ -334,17 +356,17 @@ body {
     transition: transform 0.1s !important;
     margin-top: -15px !important;
 }
-#comp-value-slider::-webkit-slider-thumb:hover, #comp-freq-slider::-webkit-slider-thumb:hover, #comp-phase-slider::-webkit-slider-thumb:hover {
+#comp-value-slider::-webkit-slider-thumb:hover, #comp-freq-slider::-webkit-slider-thumb:hover, #comp-phase-slider::-webkit-slider-thumb:hover, #comp-rint-slider::-webkit-slider-thumb:hover {
     transform: scale(1.1) !important;
 }
-#comp-value-slider::-moz-range-track, #comp-freq-slider::-moz-range-track, #comp-phase-slider::-moz-range-track {
+#comp-value-slider::-moz-range-track, #comp-freq-slider::-moz-range-track, #comp-phase-slider::-moz-range-track, #comp-rint-slider::-moz-range-track {
     width: 100% !important;
     height: 4px !important;
     cursor: pointer !important;
     background: var(--slider-track) !important;
     border-radius: 2px !important;
 }
-#comp-value-slider::-moz-range-thumb, #comp-freq-slider::-moz-range-thumb, #comp-phase-slider::-moz-range-thumb {
+#comp-value-slider::-moz-range-thumb, #comp-freq-slider::-moz-range-thumb, #comp-phase-slider::-moz-range-thumb, #comp-rint-slider::-moz-range-thumb {
     width: 34px !important;
     height: 34px !important;
     border-radius: 50% !important;
@@ -356,7 +378,7 @@ body {
     transition: transform 0.1s !important;
     border: none !important;
 }
-#comp-value-slider::-moz-range-thumb:hover, #comp-freq-slider::-moz-range-thumb:hover, #comp-phase-slider::-moz-range-thumb:hover {
+#comp-value-slider::-moz-range-thumb:hover, #comp-freq-slider::-moz-range-thumb:hover, #comp-phase-slider::-moz-range-thumb:hover, #comp-rint-slider::-moz-range-thumb:hover {
     transform: scale(1.1) !important;
 }
 
@@ -398,7 +420,7 @@ body {
 #modal-cancel { background: #30363d; color: white; }
 #modal-save { background: var(--accent-color); color: white; }
 
-#comp-value, #comp-freq, #comp-phase {
+#comp-value, #comp-freq, #comp-phase, #comp-rint {
     font-size: 24px;
     font-weight: bold;
     padding: 8px;
@@ -537,10 +559,30 @@ input[type=range]::-moz-range-thumb {
     }
 }
 
-/* カスタムトグルアイコンの回転 */
+/* カスタムトグルアイコンの回転と凹凸効果 */
+.toggle-icon {
+    border-radius: 4px;
+    box-shadow: 2px 2px 4px rgba(0,0,0,0.3), -1px -1px 2px rgba(255,255,255,0.1);
+    transition: box-shadow 0.2s;
+}
+
+.custom-toggle-label input:checked + .toggle-icon {
+    box-shadow: inset 2px 2px 4px rgba(0,0,0,0.5), inset -1px -1px 2px rgba(255,255,255,0.1);
+}
+
 .custom-toggle-label input:checked + .toggle-icon svg {
     transform: rotateX(180deg);
 }
+
+/* 絶対値モード時の受動素子極性端子の非表示制御 */
+.abs-mode-active .passive-polarity {
+    display: none;
+}
+
+/* ABSボタンのテキスト切り替え */
+.text-on { display: none; }
+input:checked + .toggle-icon .text-off { display: none; }
+input:checked + .toggle-icon .text-on { display: block; }
 
 /* グラフ専用スライダーのスタイル */
 #graph-v-range-slider, #graph-i-range-slider {

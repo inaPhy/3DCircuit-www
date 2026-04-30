@@ -136,6 +136,9 @@ class Simulator {
                     const vSourceIdx = isAC ? (vSources.length + acSources.indexOf(c)) : vSources.indexOf(c);
                     const vRow = numVariables + vSourceIdx;
                     let val = parseFloat(c.value) || 0;
+                    
+                    // Internal Resistance (Default 0.001 ohms)
+                    const rInt = (c.rInt !== undefined) ? parseFloat(c.rInt) : 0.001;
 
                     if (isAC) {
                         // AC Source: V(t) = Vpeak * sin(2 * PI * f * t + phase)
@@ -152,6 +155,10 @@ class Simulator {
                         A.set([n2, vRow], -1);
                         A.set([vRow, n2], -1);
                     }
+                    // Add internal resistance to A matrix (V1 - V2 - I*rInt = V)
+                    // With I defined as current into n1, supplying means I is negative.
+                    // V1 - V2 = V + I*rInt = V - |I|*rInt. Correct.
+                    A.set([vRow, vRow], -rInt);
                     Z.set([vRow, 0], val);
                 } else if (c.type === 'capacitor') {
                     if (dt > 0) {
