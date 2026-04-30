@@ -1,11 +1,11 @@
 const simulator = new Simulator();
 
 // Config
-const GRID_SIZE_X = 15;
-const GRID_SIZE_Y = 10;
-const CELL_SIZE = 60;
-const SVG_WIDTH = GRID_SIZE_X * CELL_SIZE;
-const SVG_HEIGHT = GRID_SIZE_Y * CELL_SIZE;
+let GRID_SIZE_X = 11;
+let GRID_SIZE_Y = 7;
+let CELL_SIZE = 60;
+let SVG_WIDTH = GRID_SIZE_X * CELL_SIZE;
+let SVG_HEIGHT = GRID_SIZE_Y * CELL_SIZE;
 
 // State
 let components = []; // { id, type, x, y, rotation, value }
@@ -148,12 +148,71 @@ const tooltip = document.getElementById('tooltip');
 
 // Init
 function init() {
-    svg.setAttribute('viewBox', `0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`);
-    document.documentElement.classList.add('light-mode'); // 3Dモデルの色と統一するため、デフォルトはライトモード
-    renderGridBackground();
-    setupEventListeners();
-    loadSettings(); // settings.ini を読み込んで反映
+    updateCanvasSize(); // 初回サイズ計算
+    setupEventListeners(); // イベントリスナーの登録
+    document.documentElement.classList.add('light-mode');
+    loadSettings();
     render();
+}
+
+function updateCanvasSize() {
+    const workspace = document.getElementById('workspace');
+    if (!workspace) return;
+    
+    const w = workspace.clientWidth;
+    const h = workspace.clientHeight;
+    
+    // 1. グリッド数の決定 (スマホ縦画面なら 5x7、それ以外は 11x7)
+    const nextGridX = (w < h && w < 600) ? 5 : 11;
+    const nextGridY = 7; // 縦は7で固定
+    
+    let needsRender = false;
+
+    // 2. グリッド縮小時のはみ出しパーツ削除処理
+    if (nextGridX < GRID_SIZE_X || nextGridY < GRID_SIZE_Y) {
+        const outOfBounds = components.filter(c => c.x >= nextGridX || c.y >= nextGridY);
+        if (outOfBounds.length > 0) {
+            // はみ出しがある場合はシミュレーションを停止して削除
+            forceStopSimulation();
+            components = components.filter(c => c.x < nextGridX && c.y < nextGridY);
+            needsRender = true;
+        }
+    }
+
+    GRID_SIZE_X = nextGridX;
+    GRID_SIZE_Y = nextGridY;
+
+    // 3. マスの大きさを決定
+    // 画面内に全マスが収まるように計算
+    const margin = 20; 
+    CELL_SIZE = Math.floor((w - margin) / GRID_SIZE_X);
+    
+    // 縦方向にも収まるかチェック
+    if (CELL_SIZE * GRID_SIZE_Y > h - margin) {
+        CELL_SIZE = Math.floor((h - margin) / GRID_SIZE_Y);
+    }
+    
+    // 極端なサイズにならないよう制限 (スマホでの操作性を考慮し最小値を維持)
+    CELL_SIZE = Math.max(45, Math.min(120, CELL_SIZE));
+    
+    SVG_WIDTH = GRID_SIZE_X * CELL_SIZE;
+    SVG_HEIGHT = GRID_SIZE_Y * CELL_SIZE;
+    
+    if (svg) {
+        svg.setAttribute('viewBox', `0 0 ${SVG_WIDTH} ${SVG_HEIGHT}`);
+        svg.style.width = `${SVG_WIDTH}px`; // 100%ではなく実サイズを指定して中央寄せ
+        svg.style.height = `${SVG_HEIGHT}px`;
+    }
+    
+    if (typeof simulator3D !== 'undefined' && simulator3D) {
+        simulator3D.GRID_SCALE = CELL_SIZE;
+        if (simulator3D.isActive) {
+            simulator3D.update(components, simulationResults);
+        }
+    }
+    
+    renderGridBackground();
+    render(); 
 }
 
 function renderGridBackground() {
@@ -181,6 +240,7 @@ function setupEventListeners() {
     // Pointer DnD from toolbar
     document.querySelectorAll('.tool-item').forEach(item => {
         item.addEventListener('pointerdown', (e) => {
+            e.preventDefault(); // タッチ時の既定動作（スクロール等）を抑制
             const type = item.dataset.type;
             startDragging(e, type, true);
         });
@@ -189,6 +249,7 @@ function setupEventListeners() {
     // Global listeners for dragging
     window.addEventListener('pointermove', onDragging);
     window.addEventListener('pointerup', endDragging);
+    window.addEventListener('pointercancel', endDragging); // 中断時も終了処理を行う
 
     // Dark Mode Toggle
     const darkModeCheckbox = document.getElementById('dark-mode-checkbox');
@@ -512,6 +573,35 @@ function setupEventListeners() {
             e.target.value = ''; // Reset
         });
     }
+    // Window Resize
+    window.addEventListener('resize', updateCanvasSize);
+
+    // Canvas Interaction (Selection and Dragging existing)
+    interactionLayer.addEventListener('pointerdown', (e) => {
+        if (isSimulating) return; // Disable editing during simulation
+        const pt = getSVGPoint(e.clientX, e.clientY);
+        const gx = Math.floor(pt.x / CELL_SIZE);
+        const gy = Math.floor(pt.y / CELL_SIZE);
+        
+        const comp = components.find(c => c.x === gx && c.y === gy);
+        if (comp) {
+            if (e.button === 0) { // Left click: start dragging
+                startDragging(e, comp.type, false, comp.id);
+            }
+        }
+    });
+
+    interactionLayer.addEventListener('click', (e) => {
+        if (isSimulating) return;
+        const pt = getSVGPoint(e.clientX, e.clientY);
+        const gx = Math.floor(pt.x / CELL_SIZE);
+        const gy = Math.floor(pt.y / CELL_SIZE);
+        
+        const comp = components.find(c => c.x === gx && c.y === gy);
+        if (comp) {
+            openParamModal(comp.id);
+        }
+    });
 }
 
 function updateResultsTable() {
@@ -726,9 +816,9 @@ function startDragging(e, type, isNew, compId = null) {
         const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         txt.textContent = `${val !== undefined ? val : ''}${unit}`;
         txt.setAttribute('x', 0);
-        txt.setAttribute('y', 25);
+        txt.setAttribute('y', CELL_SIZE * 0.42);
         txt.setAttribute('text-anchor', 'middle');
-        txt.setAttribute('font-size', '10px');
+        txt.setAttribute('font-size', `${Math.max(10, CELL_SIZE * 0.16)}px`);
         txt.setAttribute('font-weight', 'bold');
         txt.setAttribute('fill', 'var(--text-primary)');
         txt.setAttribute('filter', 'drop-shadow(0 1px 2px var(--text-shadow))');
@@ -739,19 +829,19 @@ function startDragging(e, type, isNew, compId = null) {
     if (type === 'switch') {
         const swBtn = document.createElementNS('http://www.w3.org/2000/svg', 'g');
         const btnBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        btnBg.setAttribute('x', -14);
-        btnBg.setAttribute('y', 12);
-        btnBg.setAttribute('width', 28);
-        btnBg.setAttribute('height', 14);
+        btnBg.setAttribute('x', -CELL_SIZE * 0.23);
+        btnBg.setAttribute('y', CELL_SIZE * 0.2);
+        btnBg.setAttribute('width', CELL_SIZE * 0.46);
+        btnBg.setAttribute('height', CELL_SIZE * 0.23);
         btnBg.setAttribute('rx', 4);
         btnBg.setAttribute('fill', '#fff');
         
         const btnTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
         btnTxt.textContent = val === 1 ? 'ON' : 'OFF';
         btnTxt.setAttribute('x', 0);
-        btnTxt.setAttribute('y', 22);
+        btnTxt.setAttribute('y', CELL_SIZE * 0.36);
         btnTxt.setAttribute('text-anchor', 'middle');
-        btnTxt.setAttribute('font-size', '10px');
+        btnTxt.setAttribute('font-size', `${Math.max(9, CELL_SIZE * 0.15)}px`);
         btnTxt.setAttribute('font-weight', 'bold');
         btnTxt.setAttribute('fill', '#1a1b1e');
         
@@ -861,10 +951,11 @@ function updateGhostPos(e) {
 }
 
 function getSVGPoint(clientX, clientY) {
-    const pt = svg.createSVGPoint();
-    pt.x = clientX;
-    pt.y = clientY;
-    return pt.matrixTransform(svg.getScreenCTM().inverse());
+    const rect = svg.getBoundingClientRect();
+    // SVG内の座標系(0〜SVG_WIDTH)に変換
+    const x = (clientX - rect.left) * (SVG_WIDTH / rect.width);
+    const y = (clientY - rect.top) * (SVG_HEIGHT / rect.height);
+    return { x, y };
 }
 
 // Logic
@@ -1042,6 +1133,7 @@ function getShortLabel(type) {
 function render() {
     circuitLayer.innerHTML = '';
     interactionLayer.innerHTML = '';
+    ghostLayer.innerHTML = ''; // 予期せず残った残像を掃除
 
     components.forEach(comp => {
         const wrapper = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -1069,10 +1161,11 @@ function render() {
 
         // Invisible hit box for body
         const hitBox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-        hitBox.setAttribute('x', -20);
-        hitBox.setAttribute('y', -20);
-        hitBox.setAttribute('width', 40);
-        hitBox.setAttribute('height', 40);
+        const hr = CELL_SIZE * 0.35;
+        hitBox.setAttribute('x', -hr);
+        hitBox.setAttribute('y', -hr);
+        hitBox.setAttribute('width', hr * 2);
+        hitBox.setAttribute('height', hr * 2);
         hitBox.setAttribute('fill', 'rgba(255,255,255,0.01)'); // Non-zero opacity to ensure hits in all browsers
         group.appendChild(hitBox);
 
@@ -1130,9 +1223,9 @@ function render() {
                 txt.id = `label-value-${comp.id}`;
                 txt.textContent = displayValueText;
                 txt.setAttribute('x', 0);
-                txt.setAttribute('y', 25);
+                txt.setAttribute('y', CELL_SIZE * 0.42); // マスのサイズに応じて位置を調整
                 txt.setAttribute('text-anchor', 'middle');
-                txt.setAttribute('font-size', '10px');
+                txt.setAttribute('font-size', `${Math.max(10, CELL_SIZE * 0.16)}px`); // 文字サイズも動的に変更
                 txt.setAttribute('font-weight', 'bold');
                 txt.setAttribute('fill', 'var(--text-primary)');
                 txt.setAttribute('filter', 'drop-shadow(0 1px 2px var(--text-shadow))');
@@ -1146,19 +1239,19 @@ function render() {
             swBtn.style.cursor = 'pointer';
             
             const btnBg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            btnBg.setAttribute('x', -14);
-            btnBg.setAttribute('y', 12);
-            btnBg.setAttribute('width', 28);
-            btnBg.setAttribute('height', 14);
+            btnBg.setAttribute('x', -CELL_SIZE * 0.23);
+            btnBg.setAttribute('y', CELL_SIZE * 0.2);
+            btnBg.setAttribute('width', CELL_SIZE * 0.46);
+            btnBg.setAttribute('height', CELL_SIZE * 0.23);
             btnBg.setAttribute('rx', 4);
             btnBg.setAttribute('fill', '#fff');
             
             const btnTxt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             btnTxt.textContent = comp.value === 1 ? 'ON' : 'OFF';
             btnTxt.setAttribute('x', 0);
-            btnTxt.setAttribute('y', 22);
+            btnTxt.setAttribute('y', CELL_SIZE * 0.36);
             btnTxt.setAttribute('text-anchor', 'middle');
-            btnTxt.setAttribute('font-size', '10px');
+            btnTxt.setAttribute('font-size', `${Math.max(9, CELL_SIZE * 0.15)}px`);
             btnTxt.setAttribute('font-weight', 'bold');
             btnTxt.setAttribute('fill', '#1a1b1e');
             btnTxt.setAttribute('pointer-events', 'none');
@@ -1513,21 +1606,24 @@ function renderParticles() {
                 for (let p = 0; p < numParticles; p++) {
                     const normProg = (comp.legProgress[side] + p / numParticles) % 1;
                     
+                    const r = Math.max(1.2, CELL_SIZE * 0.035);
+                    const half = CELL_SIZE / 2;
+                    
                     let lx = 0, ly = 0;
-                    if (side === 'left') { lx = -30 + normProg * 30; }
-                    else if (side === 'right') { lx = 30 - normProg * 30; }
-                    else if (side === 'top') { ly = -30 + normProg * 30; }
-                    else if (side === 'bottom') { ly = 30 - normProg * 30; }
+                    if (side === 'left') { lx = -half + normProg * half; }
+                    else if (side === 'right') { lx = half - normProg * half; }
+                    else if (side === 'top') { ly = -half + normProg * half; }
+                    else if (side === 'bottom') { ly = half - normProg * half; }
 
-                    const cx = comp.x * CELL_SIZE + CELL_SIZE / 2;
-                    const cy = comp.y * CELL_SIZE + CELL_SIZE / 2;
+                    const cx = comp.x * CELL_SIZE + half;
+                    const cy = comp.y * CELL_SIZE + half;
                     
                     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                     circle.setAttribute('cx', cx + lx);
                     circle.setAttribute('cy', cy + ly);
-                    circle.setAttribute('r', 2);
+                    circle.setAttribute('r', r);
                     circle.setAttribute('fill', '#fcc419');
-                    circle.setAttribute('filter', 'drop-shadow(0 0 2px #fcc419)');
+                    circle.setAttribute('filter', `drop-shadow(0 0 ${r}px #fcc419)`);
                     layer.appendChild(circle);
                 }
             };
@@ -1560,16 +1656,18 @@ function renderParticles() {
             }
             const plateDiff = vPlateNeg3 - vPlatePos3;
 
-            const cx = comp.x * CELL_SIZE + CELL_SIZE / 2;
-            const cy = comp.y * CELL_SIZE + CELL_SIZE / 2;
+            const r = Math.max(1.2, CELL_SIZE * 0.035);
+            const half = CELL_SIZE / 2;
+            const cx = comp.x * CELL_SIZE + half;
+            const cy = comp.y * CELL_SIZE + half;
             
             const drawCapParticle = (lx, ly) => {
                 const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 circle.setAttribute('cx', cx + lx);
                 circle.setAttribute('cy', cy + ly);
-                circle.setAttribute('r', 2);
+                circle.setAttribute('r', r);
                 circle.setAttribute('fill', '#fcc419');
-                circle.setAttribute('filter', 'drop-shadow(0 0 2px #fcc419)');
+                circle.setAttribute('filter', `drop-shadow(0 0 ${r}px #fcc419)`);
                 layer.appendChild(circle);
             };
 
@@ -1604,19 +1702,23 @@ function renderParticles() {
             const numCapParticles = 2; // Use 2 particles per wire to match visual density
             for (let p = 0; p < numCapParticles; p++) {
                 const progress = (comp.pProgress + p / numCapParticles) % 1;
+                const half = CELL_SIZE / 2;
+                const gap = CELL_SIZE * 0.1; // 6px relative to 60
+                const travel = half - gap;   // 24px relative to 60
+                
                 let lx1 = 0, ly1 = 0, lx2 = 0, ly2 = 0;
                 if (comp.rotation === 0) {
-                    lx1 = -30 + progress * 24; ly1 = 0; // Left wire: -30 to -6
-                    lx2 = 6 + progress * 24; ly2 = 0;   // Right wire: 6 to 30
+                    lx1 = -half + progress * travel; ly1 = 0;
+                    lx2 = gap + progress * travel; ly2 = 0;
                 } else if (comp.rotation === 1) {
-                    lx1 = 0; ly1 = -30 + progress * 24; // Top wire: -30 to -6
-                    lx2 = 0; ly2 = 6 + progress * 24;   // Bottom wire: 6 to 30
+                    lx1 = 0; ly1 = -half + progress * travel;
+                    lx2 = 0; ly2 = gap + progress * travel;
                 } else if (comp.rotation === 2) {
-                    lx1 = 30 - progress * 24; ly1 = 0;  // Right wire: 30 to 6
-                    lx2 = -6 - progress * 24; ly2 = 0;  // Left wire: -6 to -30
+                    lx1 = half - progress * travel; ly1 = 0;
+                    lx2 = -gap - progress * travel; ly2 = 0;
                 } else {
-                    lx1 = 0; ly1 = 30 - progress * 24;  // Bottom wire: 30 to 6
-                    lx2 = 0; ly2 = -6 - progress * 24;  // Top wire: -6 to -30
+                    lx1 = 0; ly1 = half - progress * travel;
+                    lx2 = 0; ly2 = -gap - progress * travel;
                 }
                 drawCapParticle(lx1, ly1);
                 drawCapParticle(lx2, ly2);
@@ -1634,12 +1736,13 @@ function renderParticles() {
             const pos = getParticlePos(comp, progress); // Normalize 0..1
             
             if (pos) {
+                const r = Math.max(1.2, CELL_SIZE * 0.035);
                 const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 circle.setAttribute('cx', pos.x);
                 circle.setAttribute('cy', pos.y);
-                circle.setAttribute('r', 2);
+                circle.setAttribute('r', r);
                 circle.setAttribute('fill', '#fcc419'); // Golden light
-                circle.setAttribute('filter', 'drop-shadow(0 0 2px #fcc419)');
+                circle.setAttribute('filter', `drop-shadow(0 0 ${r}px #fcc419)`);
                 layer.appendChild(circle);
             }
         }
@@ -1647,18 +1750,17 @@ function renderParticles() {
 }
 
 function getParticlePos(comp, progress) {
-    const cx = comp.x * CELL_SIZE + CELL_SIZE / 2;
-    const cy = comp.y * CELL_SIZE + CELL_SIZE / 2;
+    const half = CELL_SIZE / 2;
+    const cx = comp.x * CELL_SIZE + half;
+    const cy = comp.y * CELL_SIZE + half;
     
-    // Components are +/- 30px from center (CELL_SIZE=60)
     let lx, ly;
     
     if (comp.type === 'wire_l') {
-        // L wire path Top to Right when rot=0
         if (progress < 0.5) {
-            lx = 0; ly = -30 + progress * 2 * 30;
+            lx = 0; ly = -half + progress * 2 * half;
         } else {
-            lx = (progress - 0.5) * 2 * 30; ly = 0;
+            lx = (progress - 0.5) * 2 * half; ly = 0;
         }
         if (comp.rotation === 1) { const tx = lx; lx = -ly; ly = tx; }
         else if (comp.rotation === 2) { lx = -lx; ly = -ly; }
@@ -1666,23 +1768,25 @@ function getParticlePos(comp, progress) {
         return { x: cx + lx, y: cy + ly };
     }
 
-    if (comp.rotation === 0) { // H: -30 to 30
-        lx = -30 + progress * 60; ly = 0;
+    if (comp.rotation === 0) { // H
+        lx = -half + progress * CELL_SIZE; ly = 0;
     } else if (comp.rotation === 1) { // V
-        lx = 0; ly = -30 + progress * 60;
+        lx = 0; ly = -half + progress * CELL_SIZE;
     } else if (comp.rotation === 2) { // H Rev
-        lx = 30 - progress * 60; ly = 0;
+        lx = half - progress * CELL_SIZE; ly = 0;
     } else { // V Rev
-        lx = 0; ly = 30 - progress * 60;
+        lx = 0; ly = half - progress * CELL_SIZE;
     }
-
-    // Since group was rotated in render(), we need to manually rotate back or just calculate world pos
-    // But it's easier to just calculate world pos based on rotation
     return { x: cx + lx, y: cy + ly };
 }
 
 function drawComponentVisual(comp) {
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    
+    // 現在のCELL_SIZEに合わせてパーツをスケーリング (基準サイズを60とする)
+    const scale = CELL_SIZE / 60;
+    g.setAttribute('transform', `scale(${scale})`);
+    
     const color = 'var(--text-primary)';
     const bulbIntensity = (simulationResults && simulationResults.currents[comp.id]) ? Math.abs(simulationResults.currents[comp.id]) : 0;
     
@@ -1880,12 +1984,13 @@ function addPassivePolarity(g, color) {
 function addRotationZones(group, id) {
     if (isSimulating) return; // シミュレーション中は回転UIを表示しない
 
-    const size = 20;
+    const half = CELL_SIZE / 2;
+    const size = Math.max(16, CELL_SIZE * 0.3); // マスの約30%の大きさを回転エリアとする
     const offsets = [
-        { x: -30, y: -30 }, // TL
-        { x: 10, y: -30 },  // TR
-        { x: 10, y: 10 },   // BR
-        { x: -30, y: 10 }    // BL
+        { x: -half, y: -half },             // TL
+        { x: half - size, y: -half },       // TR
+        { x: half - size, y: half - size }, // BR
+        { x: -half, y: half - size }        // BL
     ];
     offsets.forEach(off => {
         const rz = document.createElementNS('http://www.w3.org/2000/svg', 'rect');

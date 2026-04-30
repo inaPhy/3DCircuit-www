@@ -96,10 +96,17 @@ body {
 
 .toolbar-container {
     display: flex;
-    justify-content: center;
     gap: 15px;
-    padding: 0 10px;
+    padding: 0 15px;
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* 中央揃えにしつつ、溢れた時に左端が切れないようにするトリック */
+.toolbar-container::before,
+.toolbar-container::after {
+    content: "";
+    margin: auto;
 }
 
 .tool-item {
@@ -111,6 +118,7 @@ body {
     padding: 5px;
     border-radius: 8px;
     min-width: 70px;
+    touch-action: pan-x; /* 横スクロールを許可しつつ、縦方向のドラッグ操作を可能にする */
 }
 
 .tool-item:hover {
