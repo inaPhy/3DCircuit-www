@@ -144,6 +144,8 @@ const messageArea = document.getElementById('error-text');
 const solveBtn = document.getElementById('solve-btn');
 const trashCan = document.getElementById('trash-can');
 const paramModal = document.getElementById('param-modal');
+const clearConfirmModal = document.getElementById('clear-confirm-modal');
+const clearConfirmBackdrop = document.getElementById('clear-confirm-backdrop');
 const tooltip = document.getElementById('tooltip');
 
 // Init
@@ -2206,6 +2208,69 @@ if (resultsHeader && resultsPanel) {
         isDraggingResults = false;
         resultsHeader.releasePointerCapture(e.pointerId);
     });
+}
+
+// ゴミ箱の長押しによる全消去機能
+let trashLongPressTimer;
+if (trashCan && clearConfirmModal && clearConfirmBackdrop) {
+    const startLongPress = () => {
+        trashLongPressTimer = setTimeout(() => {
+            clearConfirmModal.style.display = 'block';
+            clearConfirmBackdrop.style.display = 'block';
+        }, 800); // 800ms長押しで発動
+    };
+
+    const cancelLongPress = () => {
+        clearTimeout(trashLongPressTimer);
+    };
+
+    trashCan.addEventListener('pointerdown', startLongPress);
+    trashCan.addEventListener('pointerup', cancelLongPress);
+    trashCan.addEventListener('pointerleave', cancelLongPress);
+    trashCan.addEventListener('pointermove', (e) => {
+        // 大きく動いたらキャンセル
+        if (Math.abs(e.movementX) > 5 || Math.abs(e.movementY) > 5) cancelLongPress();
+    });
+
+    // 「はい」ボタン
+    document.getElementById('clear-yes-btn').onclick = () => {
+        components = [];
+        simulationResults = null;
+        globalGraphHistory = [];
+        selectedGraphCompIds = [];
+        
+        // 画面更新
+        render();
+        updateDynamicUI(0);
+        
+        // 3Dシミュレーターの更新
+        if (typeof simulator3D !== 'undefined' && simulator3D && simulator3D.isActive) {
+            simulator3D.update(components, simulationResults);
+        }
+        
+        // ダイアログを閉じる
+        clearConfirmModal.style.display = 'none';
+        clearConfirmBackdrop.style.display = 'none';
+        
+        // メッセージ表示
+        if (messageArea) {
+            messageArea.innerText = "すべてのパーツを消去しました";
+            messageArea.style.color = "var(--accent-primary)";
+            setTimeout(() => { if (messageArea.innerText === "すべてのパーツを消去しました") messageArea.innerText = ""; }, 3000);
+        }
+    };
+
+    // 「いいえ」ボタン
+    document.getElementById('clear-no-btn').onclick = () => {
+        clearConfirmModal.style.display = 'none';
+        clearConfirmBackdrop.style.display = 'none';
+    };
+
+    // 背景クリックでも閉じる
+    clearConfirmBackdrop.onclick = () => {
+        clearConfirmModal.style.display = 'none';
+        clearConfirmBackdrop.style.display = 'none';
+    };
 }
 
 init();

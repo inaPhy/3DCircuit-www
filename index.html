@@ -158,6 +158,16 @@
         <!-- ツールバー設定用の背景オーバーレイ -->
         <div id="toolbar-settings-backdrop" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:190;"></div>
 
+        <!-- 全消去確認ダイアログ -->
+        <div id="clear-confirm-backdrop" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:210;"></div>
+        <div id="clear-confirm-modal" class="results-panel" style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:260px; z-index:220; padding:20px; text-align:center; background:#ffffff; color:#333; border: 1px solid #ddd; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
+            <h4 style="margin:0 0 15px 0; font-size:16px;">全消去しますか？</h4>
+            <div style="display:flex; gap:15px; justify-content:center;">
+                <button id="clear-yes-btn" class="ok-button" style="flex:1; background:#ff5c7c; color:white; border:none; padding:10px; border-radius:8px; cursor:pointer;">はい</button>
+                <button id="clear-no-btn" class="ok-button" style="flex:1; background:#eee; color:#333; border:none; padding:10px; border-radius:8px; cursor:pointer;">いいえ</button>
+            </div>
+        </div>
+
         <!-- ツールバー表示設定パネル -->
         <div id="toolbar-settings-panel" class="results-panel" style="display:none; position: fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:240px; z-index:200;">
             <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--glass-border); padding-bottom:5px; margin-bottom:10px;">
