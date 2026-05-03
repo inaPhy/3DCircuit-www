@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Circuit Simulator</title>
+    <title>3D Circuit www</title>
     <link rel="stylesheet" href="style.css">
     <!-- Google Fonts -->
     <link
@@ -109,15 +109,17 @@
                 <div class="tool-item" data-type="voltmeter" title="電圧計">
                     <div class="icon-box" style="background-color: var(--bg-voltmeter);">
                         <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
-                            <path d="M -26,0 L -14,0 M 14,0 L 26,0" fill="none" stroke="currentColor"
+                            <path d="M -30,0 L -24,0 M 24,0 L 30,0" fill="none" stroke="currentColor"
                                 stroke-width="2" />
-                            <circle cx="0" cy="0" r="14" fill="var(--inner-fill)" stroke="currentColor"
-                                stroke-width="2" />
-                            <text x="0" y="0" dominant-baseline="central" text-anchor="middle" font-size="14px"
-                                font-weight="bold" fill="currentColor" stroke="none">V</text>
-                            <!-- Polarity terminals (Inside panel) -->
-                            <circle cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1" />
-                            <circle cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1" />
+                            <rect x="-24" y="-24" width="48" height="48" rx="4" fill="#1e3a8a" />
+                            <path d="M -18,0 A 18,18 0 0 1 18,0 L 18,4 L -18,4 Z" fill="#f8f9fa"
+                                transform="translate(0, -4)" />
+                            <line x1="0" y1="8" x2="0" y2="-12" stroke="#e03131" stroke-width="1.8"
+                                transform="rotate(-50, 0, 8)" />
+                            <text x="0" y="18" text-anchor="middle" font-size="12px" font-weight="bold"
+                                fill="white">V</text>
+                            <circle cx="-15" cy="18" r="4" fill="#ff4444" />
+                            <circle cx="15" cy="18" r="4" fill="#333" />
                         </svg>
                     </div>
                     <span>電圧計</span>
@@ -125,15 +127,17 @@
                 <div class="tool-item" data-type="ammeter" title="電流計">
                     <div class="icon-box" style="background-color: var(--bg-ammeter);">
                         <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
-                            <path d="M -26,0 L -14,0 M 14,0 L 26,0" fill="none" stroke="currentColor"
+                            <path d="M -30,0 L -24,0 M 24,0 L 30,0" fill="none" stroke="currentColor"
                                 stroke-width="2" />
-                            <circle cx="0" cy="0" r="14" fill="var(--inner-fill)" stroke="currentColor"
-                                stroke-width="2" />
-                            <text x="0" y="0" dominant-baseline="central" text-anchor="middle" font-size="14px"
-                                font-weight="bold" fill="currentColor" stroke="none">A</text>
-                            <!-- Polarity terminals (Inside panel) -->
-                            <circle cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1" />
-                            <circle cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1" />
+                            <rect x="-24" y="-24" width="48" height="48" rx="4" fill="#334155" />
+                            <path d="M -18,0 A 18,18 0 0 1 18,0 L 18,4 L -18,4 Z" fill="#f8f9fa"
+                                transform="translate(0, -4)" />
+                            <line x1="0" y1="8" x2="0" y2="-12" stroke="#e03131" stroke-width="1.8"
+                                transform="rotate(-50, 0, 8)" />
+                            <text x="0" y="18" text-anchor="middle" font-size="12px" font-weight="bold"
+                                fill="white">A</text>
+                            <circle cx="-15" cy="18" r="4" fill="#ff4444" />
+                            <circle cx="15" cy="18" r="4" fill="#333" />
                         </svg>
                     </div>
                     <span>電流計</span>
@@ -427,6 +431,57 @@
                                 <option value="109">12V-0.11A</option>
                             </select>
                         </div>
+                        <!-- 計測器用レンジ選択 -->
+                        <div id="meter-range-container" style="display: none; width: 100%; margin-bottom: 5px;">
+                            <label
+                                style="display: block; margin-bottom: 10px; font-size: 14px; color: var(--text-secondary);">最大値（レンジ）</label>
+                            <div id="voltmeter-ranges" style="display: none; flex-direction: row; width: 100%;">
+                                <label
+                                    style="flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; gap: 5px;">
+                                    <input type="radio" name="v-range" value="300"> <span
+                                        style="font-size: 16px; font-weight: bold;">300V</span>
+                                </label>
+                                <label
+                                    style="flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; gap: 5px;">
+                                    <input type="radio" name="v-range" value="15"> <span
+                                        style="font-size: 16px; font-weight: bold;">15V</span>
+                                </label>
+                                <label
+                                    style="flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; gap: 5px;">
+                                    <input type="radio" name="v-range" value="3"> <span
+                                        style="font-size: 16px; font-weight: bold;">3V</span>
+                                </label>
+                            </div>
+                            <div id="ammeter-ranges" style="display: none; flex-direction: row; width: 100%;">
+                                <label
+                                    style="flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; gap: 5px;">
+                                    <input type="radio" name="a-range" value="0.05"> <span
+                                        style="font-size: 16px; font-weight: bold;">50mA</span>
+                                </label>
+                                <label
+                                    style="flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; gap: 5px;">
+                                    <input type="radio" name="a-range" value="0.5"> <span
+                                        style="font-size: 16px; font-weight: bold;">500mA</span>
+                                </label>
+                                <label
+                                    style="flex: 1; display: flex; flex-direction: column; align-items: center; cursor: pointer; gap: 5px;">
+                                    <input type="radio" name="a-range" value="5"> <span
+                                        style="font-size: 16px; font-weight: bold;">5A</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- 計測器用詳細設定（内部抵抗） -->
+                        <div id="meter-details-content"
+                            style="display: none; width: 100%; margin-top: 10px; border-top: 1px solid var(--glass-border); padding-top: 10px;">
+                            <label
+                                style="display: block; margin-bottom: 5px; font-size: 14px; color: var(--text-secondary);">内部抵抗</label>
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <input type="number" id="meter-rint" step="any" min="0" style="width: 100px;">
+                                <span style="font-size: 18px; font-weight: bold;">Ω</span>
+                            </div>
+                        </div>
+
 
                         <!-- 数値入力エリア -->
                         <div id="bulb-details-content" style="width: 100%;">
@@ -504,6 +559,17 @@
                         </svg>
                     </button>
 
+                    <!-- 計測器詳細用トグル -->
+                    <button id="modal-meter-details-toggle"
+                        style="background:none; border:none; padding:0; cursor:pointer; color:var(--text-secondary); display:none; transition: transform 0.3s ease;">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="8 12 12 16 16 12"></polyline>
+                            <line x1="12" y1="8" x2="12" y2="16"></line>
+                        </svg>
+                    </button>
+
                     <button id="modal-ac-toggle"
                         style="background:none; border:none; padding:0; cursor:pointer; color:var(--text-secondary); display:none; transition: transform 0.3s ease;">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -513,6 +579,7 @@
                             <line x1="12" y1="8" x2="12" y2="16"></line>
                         </svg>
                     </button>
+
                     <button id="modal-save">保存</button>
                 </div>
             </div>

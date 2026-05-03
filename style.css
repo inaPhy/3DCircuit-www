@@ -834,3 +834,24 @@ input:checked + .slider-toggle:before {
         font-size: 14px;
     }
 }
+
+/* 計測器レンジ選択用ラジオボタンのスタイリング */
+#meter-range-container input[type="radio"] {
+    width: 18px;
+    height: 18px;
+    cursor: pointer;
+    accent-color: #000000; /* 真っ黒に近い色 */
+    transform: scale(2.5); /* 約3倍に近いインパクトのあるサイズ */
+    margin: 18px 0;        /* サイズ拡大に伴う上下の余白調整 */
+}
+
+#meter-range-container label span {
+    font-size: 18px;
+    color: var(--text-primary);
+    margin-top: 5px;
+}
+
+#meter-range-container label:hover {
+    opacity: 0.8;
+}
+

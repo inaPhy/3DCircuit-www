@@ -45,7 +45,7 @@ header p {
     border-radius: 12px;
     padding: 40px;
     margin-bottom: 30px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
     border: 1px solid var(--border-color);
 }
 
@@ -135,6 +135,11 @@ kbd {
 }
 
 @media (max-width: 600px) {
-    header h1 { font-size: 1.8rem; }
-    .card { padding: 20px; }
+    header h1 {
+        font-size: 1.8rem;
+    }
+
+    .card {
+        padding: 20px;
+    }
 }

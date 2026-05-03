@@ -144,7 +144,7 @@ async function loadSettings() {
             if (key === 'show3D') appConfig.show3D = (value === 'true');
             if (key === 'darkMode') appConfig.darkMode = (value === 'true');
             if (key === 'showAbsoluteValues') appConfig.showAbsoluteValues = (value === 'true');
-            if (key === 'showIllustrations') appConfig.showIllustrations = (value === 'true');
+            if (key === 'showIllustrations' || key === 'illustMode') appConfig.showIllustrations = (value === 'true');
             if (key === 'bulb_glow_k') appConfig.bulbGlowK = parseFloat(value) || 30;
             if (key === 'bulb_glow_min_r') appConfig.bulbGlowMinR = parseFloat(value) || 5;
             if (key === 'bulb_glow_max_r') appConfig.bulbGlowMaxR = parseFloat(value) || 60;
@@ -460,20 +460,11 @@ function setupEventListeners() {
             const comp = components.find(c => c.id === editingCompId);
             if (!comp) return;
 
-            let targetGroup;
-            const saveBtn = document.getElementById('modal-save');
-            if (comp.type === 'ac_source' || comp.type === 'battery') targetGroup = extraGroup;
-            else if (comp.type === 'voltmeter' || comp.type === 'ammeter') {
-                targetGroup = mainNumGroup;
-            }
-            
-            if (targetGroup) {
-                const isHidden = targetGroup.style.display === 'none';
-                targetGroup.style.display = isHidden ? 'block' : 'none';
+            const extraPanel = document.getElementById('input-group-extra');
+            if (extraPanel) {
+                const isHidden = extraPanel.style.display === 'none';
+                extraPanel.style.display = isHidden ? 'block' : 'none';
                 acToggleBtn.style.transform = isHidden ? 'rotateX(180deg)' : 'rotateX(0deg)';
-                if (comp.type === 'voltmeter' || comp.type === 'ammeter') {
-                    if (saveBtn) saveBtn.style.display = isHidden ? 'block' : 'none';
-                }
             }
         };
     }
@@ -485,6 +476,16 @@ function setupEventListeners() {
             const isHidden = (bulbDetailsContent.style.display === 'none');
             bulbDetailsContent.style.display = isHidden ? 'block' : 'none';
             bulbToggleBtn.style.transform = isHidden ? 'rotateX(180deg)' : 'rotateX(0deg)';
+        };
+    }
+
+    const meterToggleBtn = document.getElementById('modal-meter-details-toggle');
+    const meterDetailsContent = document.getElementById('meter-details-content');
+    if (meterToggleBtn && meterDetailsContent) {
+        meterToggleBtn.onclick = () => {
+            const isHidden = (meterDetailsContent.style.display === 'none');
+            meterDetailsContent.style.display = isHidden ? 'block' : 'none';
+            meterToggleBtn.style.transform = isHidden ? 'rotateX(180deg)' : 'rotateX(0deg)';
         };
     }
 
@@ -646,6 +647,7 @@ function setupEventListeners() {
                     showParticles: document.getElementById('show-particles-checkbox').checked,
                     showResults: document.getElementById('results-toggle-checkbox').checked,
                     timeScale: parseFloat(document.getElementById('time-scale-slider').value),
+                    showIllustrations: document.getElementById('illustration-checkbox').checked,
                     toolbarVisibility: toolbarVisibility
                 }
             };
@@ -689,6 +691,7 @@ function setupEventListeners() {
                         applyToggle('show-3d-checkbox', data.settings.show3d);
                         applyToggle('show-particles-checkbox', data.settings.showParticles);
                         applyToggle('results-toggle-checkbox', data.settings.showResults);
+                        applyToggle('illustration-checkbox', data.settings.showIllustrations);
                         
                         if (data.settings.timeScale !== undefined) {
                             const slider = document.getElementById('time-scale-slider');
@@ -787,21 +790,10 @@ function updateResultsTable() {
         }
 
         let labelName = getLabel(c.type);
-        if (c.type === 'bulb') {
-            const ratings = {
-                '5': "1.5V-0.3A",
-                '8.33': "2.5V-0.3A",
-                '12.67': "3.8V-0.3A",
-                '42': "6.3V-0.15A",
-                '109': "12V-0.11A"
-            };
-            const ratingStr = ratings[c.value.toString()];
-            if (ratingStr) labelName = ratingStr;
-        }
         const label = `${labelName} (${c.x},${c.y})`;
         if (tr.cells[0].innerText !== label) tr.cells[0].innerText = label;
         tr.cells[1].innerText = volt.toFixed(2);
-        tr.cells[2].innerText = curr.toFixed(3);
+        tr.cells[2].innerText = curr.toFixed(2);
 
         // Highlight selected row with specific trace color and style
         const traceIndex = selectedGraphCompIds.indexOf(c.id);
@@ -1145,6 +1137,12 @@ function addComponent(type, x, y) {
         initialComp.freq = 1.0;
         initialComp.phase = 90.0;
     }
+    if (type === 'voltmeter') {
+        initialComp.range = 300;
+    }
+    if (type === 'ammeter') {
+        initialComp.range = 5;
+    }
     components.push(initialComp);
     render();
 }
@@ -1176,6 +1174,8 @@ function openEdit(id) {
         const isMeter = (comp.type === 'voltmeter' || comp.type === 'ammeter');
         const saveBtn = document.getElementById('modal-save');
         const acToggleBtn = document.getElementById('modal-ac-toggle');
+        const bulbToggleBtn = document.getElementById('modal-bulb-details-toggle');
+        const meterToggleBtn = document.getElementById('modal-meter-details-toggle');
         
         if (comp.type === 'switch') {
             document.getElementById('input-group-number').style.display = 'none';
@@ -1197,16 +1197,12 @@ function openEdit(id) {
             const bulbPresetsContainer = document.getElementById('bulb-presets-container');
             const bulbPresetsSelect = document.getElementById('bulb-presets-select');
             const bulbDetailsContent = document.getElementById('bulb-details-content');
-            const bulbToggleBtn = document.getElementById('modal-bulb-details-toggle');
             
             if (bulbPresetsContainer && bulbPresetsSelect) {
                 if (comp.type === 'bulb') {
                     bulbPresetsContainer.style.display = 'block';
                     if (bulbDetailsContent) bulbDetailsContent.style.display = 'none';
-                    if (bulbToggleBtn) {
-                        bulbToggleBtn.style.display = 'block';
-                        bulbToggleBtn.style.transform = 'rotate(0deg)';
-                    }
+
                     // 現在の値に合わせてプルダウンを初期化
                     const valStr = comp.value.toString();
                     const options = Array.from(bulbPresetsSelect.options).map(o => o.value);
@@ -1216,7 +1212,7 @@ function openEdit(id) {
                 } else {
                     bulbPresetsContainer.style.display = 'none';
                     if (bulbDetailsContent) bulbDetailsContent.style.display = 'block';
-                    if (bulbToggleBtn) bulbToggleBtn.style.display = 'none';
+
                 }
             }
 
@@ -1226,10 +1222,39 @@ function openEdit(id) {
                 slider.style.display = isMeter ? 'none' : 'block';
                 
                 if (isMeter) {
-                    document.getElementById('input-group-number').style.display = 'none';
-                    if (saveBtn) saveBtn.style.display = 'none';
+                    document.getElementById('input-group-number').style.display = 'block';
+                    const bulbDetailsContent = document.getElementById('bulb-details-content');
+                    if (bulbDetailsContent) bulbDetailsContent.style.display = 'none';
+                    if (saveBtn) saveBtn.style.display = 'block';
+                    
+                    const rangeContainer = document.getElementById('meter-range-container');
+                    const vRangeDiv = document.getElementById('voltmeter-ranges');
+                    const aRangeDiv = document.getElementById('ammeter-ranges');
+                    if (rangeContainer) {
+                        rangeContainer.style.display = 'block';
+                        const isV = (comp.type === 'voltmeter');
+                        vRangeDiv.style.display = isV ? 'flex' : 'none';
+                        aRangeDiv.style.display = isV ? 'none' : 'flex';
+                        
+                        const currentRange = comp.range || (isV ? 300 : 5);
+                        const name = isV ? 'v-range' : 'a-range';
+                        const radios = document.getElementsByName(name);
+                        for (const r of radios) {
+                            if (parseFloat(r.value) === currentRange) {
+                                r.checked = true;
+                            }
+                        }
+                    }
+
+                    const meterDetailsContent = document.getElementById('meter-details-content');
+                    if (meterDetailsContent) {
+                        meterDetailsContent.style.display = 'none';
+                        document.getElementById('meter-rint').value = comp.value;
+                    }
                 } else {
                     if (saveBtn) saveBtn.style.display = 'block';
+                    const rangeContainer = document.getElementById('meter-range-container');
+                    if (rangeContainer) rangeContainer.style.display = 'none';
                 }
                 
                 if (!isMeter) {
@@ -1252,6 +1277,11 @@ function openEdit(id) {
             const isBattery = (comp.type === 'battery');
             const isAC = (comp.type === 'ac_source');
 
+            // 全トグルボタンを一旦隠す
+            if (acToggleBtn) acToggleBtn.style.display = 'none';
+            if (bulbToggleBtn) bulbToggleBtn.style.display = 'none';
+            if (meterToggleBtn) meterToggleBtn.style.display = 'none';
+
             if (isBattery || isAC) {
                 if (acToggleBtn) {
                     acToggleBtn.style.display = 'block';
@@ -1272,10 +1302,19 @@ function openEdit(id) {
                     document.getElementById('comp-phase').value = (comp.phase !== undefined) ? comp.phase : 90.0;
                     document.getElementById('comp-phase-slider').value = (comp.phase !== undefined) ? comp.phase : 90.0;
                 }
-            } else if (!isMeter) {
-                if (acToggleBtn) acToggleBtn.style.display = 'none';
-                if (extraPanel) extraPanel.style.display = 'none';
+            } else if (comp.type === 'bulb') {
+                if (bulbToggleBtn) {
+                    bulbToggleBtn.style.display = 'block';
+                    bulbToggleBtn.style.transform = 'rotateX(0deg)';
+                }
+            } else if (isMeter) {
+                if (meterToggleBtn) {
+                    meterToggleBtn.style.display = 'block';
+                    meterToggleBtn.style.transform = 'rotateX(0deg)';
+                }
             }
+            
+            if (extraPanel && !isBattery && !isAC) extraPanel.style.display = 'none';
         }
         const bgType = comp.type.startsWith('wire') ? 'wire' : comp.type;
         document.querySelector('#param-modal .modal-content').style.backgroundColor = `var(--bg-${bgType}, var(--panel-bg))`;
@@ -1288,6 +1327,18 @@ function saveParams() {
     if (comp) {
         if (comp.type === 'switch') {
             comp.value = parseInt(document.getElementById('comp-switch-val').value);
+        } else if (comp.type === 'voltmeter') {
+            const radios = document.getElementsByName('v-range');
+            for (const r of radios) {
+                if (r.checked) comp.range = parseFloat(r.value);
+            }
+            comp.value = parseFloat(document.getElementById('meter-rint').value) || 0;
+        } else if (comp.type === 'ammeter') {
+            const radios = document.getElementsByName('a-range');
+            for (const r of radios) {
+                if (r.checked) comp.range = parseFloat(r.value);
+            }
+            comp.value = parseFloat(document.getElementById('meter-rint').value) || 0;
         } else {
             comp.value = Math.max(0, parseFloat(document.getElementById('comp-value').value) || 0);
             if (comp.type === 'battery' || comp.type === 'ac_source') {
@@ -1389,11 +1440,15 @@ function render() {
                 const { n1, n2 } = getCompNodeNames(comp);
                 
                 if (comp.type === 'voltmeter') {
-                    const volt = Math.abs((simulationResults.voltages[n1] || 0) - (simulationResults.voltages[n2] || 0));
-                    displayValueText = `${volt.toFixed(2)}V`;
+                    const rawVolt = (simulationResults.voltages[n1] || 0) - (simulationResults.voltages[n2] || 0);
+                    const absVolt = Math.abs(rawVolt);
+                    const maxV = comp.range || 300;
+                    displayValueText = (absVolt > maxV) ? "XXX" : `${rawVolt.toFixed(2)}V`;
                 } else if (comp.type === 'ammeter') {
-                    const curr = Math.abs(simulationResults.currents[comp.id] || 0);
-                    displayValueText = `${curr.toFixed(3)}A`;
+                    const rawCurr = simulationResults.currents[comp.id] || 0;
+                    const absCurr = Math.abs(rawCurr);
+                    const maxA = comp.range || 5;
+                    displayValueText = (absCurr > maxA) ? "XXX" : `${rawCurr.toFixed(2)}A`;
                 }
             } else {
                 const unit = { battery: 'V', ac_source: 'V', resistor: 'Ω', bulb: 'Ω', capacitor: 'μF', inductor: 'mH', voltmeter: 'V', ammeter: 'A' }[comp.type] || '';
@@ -1571,14 +1626,32 @@ function updateDynamicUI(currentDt) {
     // Update component labels
     components.forEach(comp => {
         const txt = document.getElementById(`label-value-${comp.id}`);
-        if (txt && simulationResults && simulationResults.success) {
+        const needle = document.getElementById(`needle-${comp.id}`);
+        
+        if ((txt || needle) && simulationResults && simulationResults.success) {
             if (comp.type === 'voltmeter') {
                 const { n1, n2 } = getCompNodeNames(comp);
-                const volt = (simulationResults.voltages[n1] || 0) - (simulationResults.voltages[n2] || 0);
-                txt.textContent = `${volt.toFixed(2)}V`;
+                const rawVolt = (simulationResults.voltages[n1] || 0) - (simulationResults.voltages[n2] || 0);
+                const absVolt = Math.abs(rawVolt);
+                const maxV = comp.range || 300;
+                
+                if (txt) txt.textContent = (absVolt > maxV) ? "XXX" : `${rawVolt.toFixed(2)}V`;
+                if (needle) {
+                    const ratio = Math.max(Math.min(rawVolt / maxV, 1.1), -0.1);
+                    const angle = -50 + ratio * 100;
+                    needle.setAttribute('transform', `translate(0, 5) rotate(${angle})`);
+                }
             } else if (comp.type === 'ammeter') {
-                const curr = simulationResults.currents[comp.id] || 0;
-                txt.textContent = `${curr.toFixed(3)}A`;
+                const rawCurr = simulationResults.currents[comp.id] || 0;
+                const absCurr = Math.abs(rawCurr);
+                const maxA = comp.range || 5;
+                
+                if (txt) txt.textContent = (absCurr > maxA) ? "XXX" : `${rawCurr.toFixed(2)}A`;
+                if (needle) {
+                    const ratio = Math.max(Math.min(rawCurr / maxA, 1.1), -0.1);
+                    const angle = -50 + ratio * 100;
+                    needle.setAttribute('transform', `translate(0, 6) rotate(${angle})`);
+                }
             }
         }
     });
@@ -1735,7 +1808,7 @@ function updateGraphLegend() {
         }
 
         const vVal = vNum !== null ? vNum.toFixed(2) + 'V' : '--';
-        const iVal = iNum !== null ? iNum.toFixed(3) + 'A' : '--';
+        const iVal = iNum !== null ? iNum.toFixed(2) + 'A' : '--';
 
         vLegend.appendChild(createItem(color, sameTypeCount, vVal));
         iLegend.appendChild(createItem(color, sameTypeCount, iVal));
@@ -2382,53 +2455,163 @@ function drawComponentVisual(comp) {
             addPassivePolarity(g, color);
             break;
         case 'voltmeter':
-            path.setAttribute('d', 'M -30,0 L -14,0 M 14,0 L 30,0');
-            const vCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            vCircle.setAttribute('cx', 0); vCircle.setAttribute('cy', 0); vCircle.setAttribute('r', 14);
-            vCircle.setAttribute('fill', 'var(--inner-fill)'); vCircle.setAttribute('stroke', color); vCircle.setAttribute('stroke-width', '2');
-            const vText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            vText.textContent = 'V'; vText.setAttribute('x', 0); vText.setAttribute('y', 0);
-            vText.setAttribute('dominant-baseline', 'central');
-            vText.setAttribute('text-anchor', 'middle'); vText.setAttribute('font-size', '14px');
-            vText.setAttribute('font-weight', 'bold'); vText.setAttribute('fill', color);
-            if (comp.rotation) vText.setAttribute('transform', `rotate(${-comp.rotation * 90})`);
-            
-            g.appendChild(vCircle); g.appendChild(vText);
-            g.appendChild(path); // Wires on top of circle
-            
-            // Polarity terminals (Front, slightly inside to fit in panel)
-            const vPos = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            vPos.setAttribute('cx', -26); vPos.setAttribute('cy', 0); vPos.setAttribute('r', 4);
-            vPos.setAttribute('fill', '#ff0000'); vPos.setAttribute('stroke', color); vPos.setAttribute('stroke-width', '1');
-            const vNeg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            vNeg.setAttribute('cx', 26); vNeg.setAttribute('cy', 0); vNeg.setAttribute('r', 4);
-            vNeg.setAttribute('fill', '#777777'); vNeg.setAttribute('stroke', color); vNeg.setAttribute('stroke-width', '1');
-            g.appendChild(vPos); g.appendChild(vNeg);
-            return g;
+            if (showIllustrations) {
+                const { n1, n2 } = getCompNodeNames(comp);
+                const val = (simulationResults && simulationResults.voltages) ? ((simulationResults.voltages[n1] || 0) - (simulationResults.voltages[n2] || 0)) : 0;
+                
+                const body = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                body.setAttribute('x', -18); body.setAttribute('y', -18);
+                body.setAttribute('width', 36); body.setAttribute('height', 36);
+                body.setAttribute('rx', 4);
+                body.setAttribute('fill', '#1e3a8a');
+                
+                const plate = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                plate.setAttribute('d', 'M -15,3 A 15,15 0 0 1 15,3 L 15,6 L -15,6 Z');
+                plate.setAttribute('fill', '#f8f9fa');
+                plate.setAttribute('transform', 'translate(0, -3)');
+                
+                const needle = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                needle.id = `needle-${comp.id}`;
+                const maxV = comp.range || 300;
+                const ratio = Math.max(Math.min(val / maxV, 1.1), -0.1); // ストッパーを考慮しつつ少し外側まで許容
+                const angle = -50 + ratio * 100;
+                needle.setAttribute('x1', 0); needle.setAttribute('y1', 0);
+                needle.setAttribute('x2', 0); needle.setAttribute('y2', -16);
+                needle.setAttribute('stroke', '#e03131');
+                needle.setAttribute('stroke-width', '1.5');
+                needle.setAttribute('transform', `translate(0, 5) rotate(${angle})`);
+                
+                // 文字盤の目盛 (3分割)
+                const ticks = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                for (let i = 0; i <= 3; i++) {
+                    const tickAngle = (-50 + i * (100 / 3)) * Math.PI / 180;
+                    const tLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    const rInner = 14, rOuter = 16.5;
+                    tLine.setAttribute('x1', Math.sin(tickAngle) * rInner);
+                    tLine.setAttribute('y1', -Math.cos(tickAngle) * rInner + 5);
+                    tLine.setAttribute('x2', Math.sin(tickAngle) * rOuter);
+                    tLine.setAttribute('y2', -Math.cos(tickAngle) * rOuter + 5);
+                    tLine.setAttribute('stroke', '#333');
+                    tLine.setAttribute('stroke-width', '1');
+                    ticks.appendChild(tLine);
+                }
+                
+                const lab = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                lab.textContent = 'V'; lab.setAttribute('x', 0); lab.setAttribute('y', 13);
+                lab.setAttribute('text-anchor', 'middle'); lab.setAttribute('fill', 'white');
+                lab.setAttribute('style', 'font: bold 10px Arial');
+
+                path.setAttribute('d', 'M -30,0 L -18,0 M 18,0 L 30,0');
+                g.appendChild(body); g.appendChild(plate); g.appendChild(ticks); g.appendChild(needle); g.appendChild(lab);
+                g.appendChild(path);
+                
+                const tPos = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                tPos.setAttribute('cx', -11); tPos.setAttribute('cy', 13); tPos.setAttribute('r', 3);
+                tPos.setAttribute('fill', '#ff4444');
+                const tNeg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                tNeg.setAttribute('cx', 11); tNeg.setAttribute('cy', 13); tNeg.setAttribute('r', 3);
+                tNeg.setAttribute('fill', '#333333');
+                g.appendChild(tPos); g.appendChild(tNeg);
+                return g;
+            } else {
+                path.setAttribute('d', 'M -30,0 L -14,0 M 14,0 L 30,0');
+                const vCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                vCircle.setAttribute('cx', 0); vCircle.setAttribute('cy', 0); vCircle.setAttribute('r', 14);
+                vCircle.setAttribute('fill', 'var(--inner-fill)'); vCircle.setAttribute('stroke', color); vCircle.setAttribute('stroke-width', '2');
+                const vText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                vText.textContent = 'V'; vText.setAttribute('x', 0); vText.setAttribute('y', 0);
+                vText.setAttribute('dominant-baseline', 'central');
+                vText.setAttribute('text-anchor', 'middle'); vText.setAttribute('font-size', '14px');
+                vText.setAttribute('font-weight', 'bold'); vText.setAttribute('fill', color);
+                if (comp.rotation) vText.setAttribute('transform', `rotate(${-comp.rotation * 90})`);
+                g.appendChild(vCircle); g.appendChild(vText); g.appendChild(path);
+                
+                // 電圧計・電流計の端子はモードに関わらず常に表示するためクラスを付与しない
+                const vPos = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                vPos.setAttribute('cx', -26); vPos.setAttribute('cy', 0); vPos.setAttribute('r', 4);
+                vPos.setAttribute('fill', '#ff0000'); vPos.setAttribute('stroke', color); vPos.setAttribute('stroke-width', '1');
+                const vNeg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                vNeg.setAttribute('cx', 26); vNeg.setAttribute('cy', 0); vNeg.setAttribute('r', 4);
+                vNeg.setAttribute('fill', '#777777'); vNeg.setAttribute('stroke', color); vNeg.setAttribute('stroke-width', '1');
+                g.appendChild(vPos); g.appendChild(vNeg);
+                return g;
+            }
         case 'ammeter':
-            path.setAttribute('d', 'M -30,0 L -14,0 M 14,0 L 30,0');
-            const aCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            aCircle.setAttribute('cx', 0); aCircle.setAttribute('cy', 0); aCircle.setAttribute('r', 14);
-            aCircle.setAttribute('fill', 'var(--inner-fill)'); aCircle.setAttribute('stroke', color); aCircle.setAttribute('stroke-width', '2');
-            const aText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            aText.textContent = 'A'; aText.setAttribute('x', 0); aText.setAttribute('y', 0);
-            aText.setAttribute('dominant-baseline', 'central');
-            aText.setAttribute('text-anchor', 'middle'); aText.setAttribute('font-size', '14px');
-            aText.setAttribute('font-weight', 'bold'); aText.setAttribute('fill', color);
-            if (comp.rotation) aText.setAttribute('transform', `rotate(${-comp.rotation * 90})`);
-            
-            g.appendChild(aCircle); g.appendChild(aText);
-            g.appendChild(path); // Wires on top of circle
-            
-            // Polarity terminals (Front, slightly inside to fit in panel)
-            const aPos = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            aPos.setAttribute('cx', -26); aPos.setAttribute('cy', 0); aPos.setAttribute('r', 4);
-            aPos.setAttribute('fill', '#ff0000'); aPos.setAttribute('stroke', color); aPos.setAttribute('stroke-width', '1');
-            const aNeg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            aNeg.setAttribute('cx', 26); aNeg.setAttribute('cy', 0); aNeg.setAttribute('r', 4);
-            aNeg.setAttribute('fill', '#777777'); aNeg.setAttribute('stroke', color); aNeg.setAttribute('stroke-width', '1');
-            g.appendChild(aPos); g.appendChild(aNeg);
-            return g;
+            if (showIllustrations) {
+                const val = (simulationResults && simulationResults.currents) ? (simulationResults.currents[comp.id] || 0) : 0;
+                const body = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                body.setAttribute('x', -18); body.setAttribute('y', -18);
+                body.setAttribute('width', 36); body.setAttribute('height', 36);
+                body.setAttribute('rx', 4);
+                body.setAttribute('fill', '#334155');
+                const plate = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                plate.setAttribute('d', 'M -15,3 A 15,15 0 0 1 15,3 L 15,6 L -15,6 Z');
+                plate.setAttribute('fill', '#f8f9fa');
+                plate.setAttribute('transform', 'translate(0, -3)');
+                const needle = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                needle.id = `needle-${comp.id}`;
+                const maxA = comp.range || 5;
+                const ratio = Math.max(Math.min(val / maxA, 1.1), -0.1);
+                const angle = -50 + ratio * 100;
+                needle.setAttribute('x1', 0); needle.setAttribute('y1', 0);
+                needle.setAttribute('x2', 0); needle.setAttribute('y2', -16);
+                needle.setAttribute('stroke', '#e03131');
+                needle.setAttribute('stroke-width', '1.5');
+                needle.setAttribute('transform', `translate(0, 5) rotate(${angle})`);
+                
+                // 文字盤の目盛 (5分割)
+                const ticks = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                for (let i = 0; i <= 5; i++) {
+                    const tickAngle = (-50 + i * 20) * Math.PI / 180;
+                    const tLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    const rInner = 14, rOuter = 16.5;
+                    tLine.setAttribute('x1', Math.sin(tickAngle) * rInner);
+                    tLine.setAttribute('y1', -Math.cos(tickAngle) * rInner + 5);
+                    tLine.setAttribute('x2', Math.sin(tickAngle) * rOuter);
+                    tLine.setAttribute('y2', -Math.cos(tickAngle) * rOuter + 5);
+                    tLine.setAttribute('stroke', '#333');
+                    tLine.setAttribute('stroke-width', '1');
+                    ticks.appendChild(tLine);
+                }
+                
+                const lab = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                lab.textContent = 'A'; lab.setAttribute('x', 0); lab.setAttribute('y', 13);
+                lab.setAttribute('text-anchor', 'middle'); lab.setAttribute('fill', 'white');
+                lab.setAttribute('style', 'font: bold 10px Arial');
+                path.setAttribute('d', 'M -30,0 L -18,0 M 18,0 L 30,0');
+                g.appendChild(body); g.appendChild(plate); g.appendChild(ticks); g.appendChild(needle); g.appendChild(lab);
+                g.appendChild(path);
+                const tPos = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                tPos.setAttribute('cx', -11); tPos.setAttribute('cy', 13); tPos.setAttribute('r', 3);
+                tPos.setAttribute('fill', '#ff4444');
+                const tNeg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                tNeg.setAttribute('cx', 11); tNeg.setAttribute('cy', 13); tNeg.setAttribute('r', 3);
+                tNeg.setAttribute('fill', '#333333');
+                g.appendChild(tPos); g.appendChild(tNeg);
+                return g;
+            } else {
+                path.setAttribute('d', 'M -30,0 L -14,0 M 14,0 L 30,0');
+                const aCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                aCircle.setAttribute('cx', 0); aCircle.setAttribute('cy', 0); aCircle.setAttribute('r', 14);
+                aCircle.setAttribute('fill', 'var(--inner-fill)'); aCircle.setAttribute('stroke', color); aCircle.setAttribute('stroke-width', '2');
+                const aText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                aText.textContent = 'A'; aText.setAttribute('x', 0); aText.setAttribute('y', 0);
+                aText.setAttribute('dominant-baseline', 'central');
+                aText.setAttribute('text-anchor', 'middle'); aText.setAttribute('font-size', '14px');
+                aText.setAttribute('font-weight', 'bold'); aText.setAttribute('fill', color);
+                if (comp.rotation) aText.setAttribute('transform', `rotate(${-comp.rotation * 90})`);
+                g.appendChild(aCircle); g.appendChild(aText); g.appendChild(path);
+                
+                // 電圧計・電流計の端子はモードに関わらず常に表示するためクラスを付与しない
+                const aPos = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                aPos.setAttribute('cx', -26); aPos.setAttribute('cy', 0); aPos.setAttribute('r', 4);
+                aPos.setAttribute('fill', '#ff0000'); aPos.setAttribute('stroke', color); aPos.setAttribute('stroke-width', '1');
+                const aNeg = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                aNeg.setAttribute('cx', 26); aNeg.setAttribute('cy', 0); aNeg.setAttribute('r', 4);
+                aNeg.setAttribute('fill', '#777777'); aNeg.setAttribute('stroke', color); aNeg.setAttribute('stroke-width', '1');
+                g.appendChild(aPos); g.appendChild(aNeg);
+                return g;
+            }
         case 'switch':
             const s1 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             s1.setAttribute('cx', -10); s1.setAttribute('cy', 0); s1.setAttribute('r', 2); s1.setAttribute('fill', color);
@@ -2601,7 +2784,7 @@ function showTooltip(e, comp) {
     const volt = Math.abs(simulationResults.voltages[n1] - simulationResults.voltages[n2]) || 0;
     const curr = Math.abs(simulationResults.currents[comp.id] || 0);
 
-    tooltip.innerHTML = `電圧: ${volt.toFixed(2)} V<br>電流: ${curr.toFixed(3)} A`;
+    tooltip.innerHTML = `電圧: ${volt.toFixed(2)} V<br>電流: ${curr.toFixed(2)} A`;
 }
 
 function hideTooltip() {
@@ -2823,6 +3006,59 @@ function updateToolbarIcons() {
                     <!-- 極性マーク -->
                     <circle class="passive-polarity" cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
                     <circle class="passive-polarity" cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
+                </svg>
+            `;
+        }
+    }
+    const vIconBox = document.querySelector('.tool-item[data-type="voltmeter"] .icon-box');
+    if (vIconBox) {
+        if (showIllustrations) {
+            vIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <path d="M -30,0 L -24,0 M 24,0 L 30,0" fill="none" stroke="currentColor" stroke-width="2" />
+                    <rect x="-24" y="-24" width="48" height="48" rx="4" fill="#1e3a8a" />
+                    <path d="M -18,0 A 18,18 0 0 1 18,0 L 18,4 L -18,4 Z" fill="#f8f9fa" transform="translate(0, -4)" />
+                    <line x1="0" y1="8" x2="0" y2="-12" stroke="#e03131" stroke-width="1.8" transform="rotate(-50, 0, 8)" />
+                    <text x="0" y="18" text-anchor="middle" font-size="12px" font-weight="bold" fill="white">V</text>
+                    <circle cx="-15" cy="18" r="4" fill="#ff4444" />
+                    <circle cx="15" cy="18" r="4" fill="#333" />
+                </svg>
+            `;
+        } else {
+            vIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <circle cx="0" cy="0" r="14" fill="var(--inner-fill)" stroke="currentColor" stroke-width="2" />
+                    <text x="0" y="0" dominant-baseline="central" text-anchor="middle" font-size="14px" font-weight="bold" fill="currentColor">V</text>
+                    <path d="M -30,0 L -14,0 M 14,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" />
+                    <circle cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                    <circle cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
+                </svg>
+            `;
+        }
+    }
+
+    const aIconBox = document.querySelector('.tool-item[data-type="ammeter"] .icon-box');
+    if (aIconBox) {
+        if (showIllustrations) {
+            aIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <path d="M -30,0 L -24,0 M 24,0 L 30,0" fill="none" stroke="currentColor" stroke-width="2" />
+                    <rect x="-24" y="-24" width="48" height="48" rx="4" fill="#334155" />
+                    <path d="M -18,0 A 18,18 0 0 1 18,0 L 18,4 L -18,4 Z" fill="#f8f9fa" transform="translate(0, -4)" />
+                    <line x1="0" y1="8" x2="0" y2="-12" stroke="#e03131" stroke-width="1.8" transform="rotate(-50, 0, 8)" />
+                    <text x="0" y="18" text-anchor="middle" font-size="12px" font-weight="bold" fill="white">A</text>
+                    <circle cx="-15" cy="18" r="4" fill="#ff4444" />
+                    <circle cx="15" cy="18" r="4" fill="#333" />
+                </svg>
+            `;
+        } else {
+            aIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <circle cx="0" cy="0" r="14" fill="var(--inner-fill)" stroke="currentColor" stroke-width="2" />
+                    <text x="0" y="0" dominant-baseline="central" text-anchor="middle" font-size="14px" font-weight="bold" fill="currentColor">A</text>
+                    <path d="M -30,0 L -14,0 M 14,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" />
+                    <circle cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                    <circle cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
                 </svg>
             `;
         }

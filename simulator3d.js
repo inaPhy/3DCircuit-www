@@ -762,18 +762,94 @@ class Simulator3D {
             ctx.arc(22.5,  0, 7.5, Math.PI, 0);
             ctx.moveTo(30, 0); ctx.lineTo(64, 0);
         } else if (comp.type === 'voltmeter' || comp.type === 'ammeter') {
-            const t = comp.type === 'voltmeter' ? 'V' : 'A';
-            ctx.moveTo(-64, 0); ctx.lineTo(-28, 0);
-            ctx.moveTo(28, 0); ctx.lineTo(64, 0);
-            ctx.stroke(); ctx.beginPath();
-            ctx.fillStyle = '#ffffff';
-            ctx.arc(0, 0, 28, 0, Math.PI*2);
-            ctx.fill(); ctx.stroke(); ctx.beginPath();
-            ctx.fillStyle = '#000'; ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.save();
-            if (comp.rotation) { ctx.rotate(-comp.rotation * Math.PI / 2); }
-            ctx.fillText(t, 0, 2);
-            ctx.restore();
+            if (typeof showIllustrations !== 'undefined' && showIllustrations) {
+                const isV = comp.type === 'voltmeter';
+                const val = (this.simulationResults) ? (isV ? 
+                    (function() {
+                        const { n1, n2 } = getCompNodeNames(comp);
+                        return ((this.simulationResults.voltages[n1] || 0) - (this.simulationResults.voltages[n2] || 0));
+                    }.bind(this))() : 
+                    (this.simulationResults.currents[comp.id] || 0)) : 0;
+
+                // 導線
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 6;
+                ctx.moveTo(-64, 0); ctx.lineTo(-36, 0);
+                ctx.moveTo(36, 0); ctx.lineTo(64, 0);
+                ctx.stroke();
+
+                // 本体 (2Dと共通の配色)
+                ctx.fillStyle = isV ? '#1e3a8a' : '#334155';
+                ctx.beginPath();
+                const bx = -36, by = -36, bw = 72, bh = 72, br = 10;
+                ctx.moveTo(bx + br, by);
+                ctx.arcTo(bx + bw, by, bx + bw, by + bh, br);
+                ctx.arcTo(bx + bw, by + bh, bx, by + bh, br);
+                ctx.arcTo(bx, by + bh, bx, by, br);
+                ctx.arcTo(bx, by, bx + bw, by, br);
+                ctx.closePath();
+                ctx.fill();
+
+                // 文字盤 (白)
+                ctx.fillStyle = '#f8f9fa';
+                ctx.beginPath();
+                ctx.arc(0, 0, 30, Math.PI, 0);
+                ctx.lineTo(30, 6); ctx.lineTo(-30, 6);
+                ctx.closePath();
+                ctx.fill();
+
+                // 指針 (赤)
+                const maxLimit = comp.range || (isV ? 300 : 5);
+                const ratio = Math.max(Math.min(val / maxLimit, 1.1), -0.1);
+                const angle = (-50 + ratio * 100) * Math.PI / 180;
+                
+                ctx.save();
+                ctx.translate(0, 10);
+                ctx.rotate(angle);
+                ctx.strokeStyle = '#e03131';
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.moveTo(0, 0); ctx.lineTo(0, -32);
+                ctx.stroke();
+                ctx.restore();
+
+                // ラベル V/A
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(isV ? 'V' : 'A', 0, 26);
+
+                // 端子 (プラス:赤, マイナス:黒)
+                ctx.fillStyle = '#ff4444';
+                ctx.beginPath(); ctx.arc(-22, 26, 6, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#333333';
+                ctx.beginPath(); ctx.arc(22, 26, 6, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); // 後続の stroke() が端子に適用されないようにパスをクリア
+            } else {
+                const t = comp.type === 'voltmeter' ? 'V' : 'A';
+                ctx.moveTo(-64, 0); ctx.lineTo(-28, 0);
+                ctx.moveTo(28, 0); ctx.lineTo(64, 0);
+                ctx.stroke(); ctx.beginPath();
+                ctx.fillStyle = '#ffffff';
+                ctx.arc(0, 0, 28, 0, Math.PI*2);
+                ctx.fill(); ctx.stroke(); ctx.beginPath();
+                ctx.fillStyle = '#000'; ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.save();
+                if (comp.rotation) { ctx.rotate(-comp.rotation * Math.PI / 2); }
+                ctx.fillText(t, 0, 2);
+                ctx.restore();
+
+                // 図記号モードでも端子は表示 (2Dの X=26 を2倍して 52)
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath(); ctx.arc(-52, 0, 8, 0, Math.PI*2); ctx.fill();
+                ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+                ctx.fillStyle = '#777777';
+                ctx.beginPath(); ctx.arc(52, 0, 8, 0, Math.PI*2); ctx.fill();
+                ctx.stroke();
+            }
         }
 
         ctx.stroke();
