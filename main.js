@@ -19,6 +19,7 @@ const graphSampleInterval = 0.005;
 let graphRangeV = 10.0;
 let graphRangeI = 1.00;
 let showAbsoluteValues = true; // Default to ON as requested
+let showIllustrations = false; // ver2.02: イラスト表示モードのフラグ
 
 // Component Colors for Graphs (Sync with CSS variables --bg-xxx)
 const compColors = {
@@ -64,8 +65,66 @@ let appConfig = {
     show3D: true,
     darkMode: false,
     showAbsoluteValues: true,
+    showIllustrations: false,
+    bulbGlowK: 30, // 電球の発光係数 k
+    bulbGlowMinR: 5, // 最小発光半径
+    bulbGlowMaxR: 60, // 最大発光半径
     toolbarVisibility: {} // Will be populated from settings.ini
 };
+
+// 抵抗器のカラーコード算出ヘルパー (4本帯)
+function getResistorColorBands(value) {
+    const colors = [
+        '#000000', // 0: 黒
+        '#8b4513', // 1: 茶
+        '#ff0000', // 2: 赤
+        '#ffa500', // 3: 橙
+        '#ffff00', // 4: 黄
+        '#008000', // 5: 緑
+        '#0000ff', // 6: 青
+        '#ee82ee', // 7: 紫
+        '#808080', // 8: 灰
+        '#ffffff'  // 9: 白
+    ];
+    
+    // 0 または負の数は黒として扱う
+    if (value <= 0) return [colors[0], colors[0], colors[0], '#ffd700'];
+
+    // 指数表記を利用して分解 (例: 4700 -> 4.7e+3)
+    const s = value.toExponential().split('e');
+    let mantissa = parseFloat(s[0]);
+    let exp = parseInt(s[1]);
+
+    // 有効数字を2桁の整数にする (例: 4.7 -> 47, exp 3 -> 2)
+    // 1.0e+0 -> 10, exp -1
+    let d1 = Math.floor(mantissa);
+    let d2 = Math.round((mantissa - d1) * 10);
+    let multiplier = exp - 1;
+
+    // 繰り上がり処理
+    if (d2 >= 10) {
+        d1++;
+        d2 = 0;
+        if (d1 >= 10) {
+            d1 = 1;
+            multiplier++;
+        }
+    }
+
+    // 倍数の色 (金:-1, 銀:-2)
+    let mColor;
+    if (multiplier === -1) mColor = '#ffd700'; // 金
+    else if (multiplier === -2) mColor = '#c0c0c0'; // 銀
+    else if (multiplier >= 0 && multiplier <= 9) mColor = colors[multiplier];
+    else mColor = colors[0]; // 範囲外は黒
+
+    return [
+        colors[Math.max(0, Math.min(9, d1))], 
+        colors[Math.max(0, Math.min(9, d2))], 
+        mColor, 
+        '#ffd700' // 許容差: 金(±5%)固定
+    ];
+}
 
 async function loadSettings() {
     try {
@@ -85,6 +144,10 @@ async function loadSettings() {
             if (key === 'show3D') appConfig.show3D = (value === 'true');
             if (key === 'darkMode') appConfig.darkMode = (value === 'true');
             if (key === 'showAbsoluteValues') appConfig.showAbsoluteValues = (value === 'true');
+            if (key === 'showIllustrations') appConfig.showIllustrations = (value === 'true');
+            if (key === 'bulb_glow_k') appConfig.bulbGlowK = parseFloat(value) || 30;
+            if (key === 'bulb_glow_min_r') appConfig.bulbGlowMinR = parseFloat(value) || 5;
+            if (key === 'bulb_glow_max_r') appConfig.bulbGlowMaxR = parseFloat(value) || 60;
             
             // Toolbar Visibility settings: show_battery, show_ac_source, etc.
             if (key.startsWith('show_')) {
@@ -123,6 +186,13 @@ function applySettings() {
         absCheck.checked = appConfig.showAbsoluteValues;
         showAbsoluteValues = appConfig.showAbsoluteValues;
         document.body.classList.toggle('abs-mode-active', showAbsoluteValues);
+    }
+
+    const illCheck = document.getElementById('illustration-checkbox');
+    if (illCheck) {
+        illCheck.checked = appConfig.showIllustrations;
+        showIllustrations = appConfig.showIllustrations;
+        updateToolbarIcons();
     }
 
     // Apply Toolbar Visibility from settings.ini
@@ -282,6 +352,7 @@ function setupEventListeners() {
             document.body.classList.toggle('abs-mode-active', showAbsoluteValues);
             updateResultsTable();
             updateGraphLegend();
+            updateToolbarIcons();
             render();
         });
     }
@@ -303,12 +374,30 @@ function setupEventListeners() {
     const compValueInput = document.getElementById('comp-value');
     const compValueSlider = document.getElementById('comp-value-slider');
     if (compValueInput && compValueSlider) {
+        const bulbPresetsSelect = document.getElementById('bulb-presets-select');
+        const updatePresetSelect = (val) => {
+            if (!bulbPresetsSelect) return;
+            const options = Array.from(bulbPresetsSelect.options).map(o => o.value);
+            if (options.includes(val.toString())) {
+                bulbPresetsSelect.value = val.toString();
+            }
+            // "custom" は削除されたため、一致しない場合は何もしない
+        };
+
         compValueSlider.addEventListener('input', (e) => {
             compValueInput.value = e.target.value;
+            updatePresetSelect(e.target.value);
         });
         compValueInput.addEventListener('input', (e) => {
             compValueSlider.value = e.target.value;
+            updatePresetSelect(e.target.value);
         });
+        if (bulbPresetsSelect) {
+            bulbPresetsSelect.addEventListener('change', (e) => {
+                compValueInput.value = e.target.value;
+                compValueSlider.value = e.target.value;
+            });
+        }
     }
 
     // AC Extra fields sync
@@ -386,6 +475,16 @@ function setupEventListeners() {
                     if (saveBtn) saveBtn.style.display = isHidden ? 'block' : 'none';
                 }
             }
+        };
+    }
+
+    const bulbToggleBtn = document.getElementById('modal-bulb-details-toggle');
+    const bulbDetailsContent = document.getElementById('bulb-details-content');
+    if (bulbToggleBtn && bulbDetailsContent) {
+        bulbToggleBtn.onclick = () => {
+            const isHidden = (bulbDetailsContent.style.display === 'none');
+            bulbDetailsContent.style.display = isHidden ? 'block' : 'none';
+            bulbToggleBtn.style.transform = isHidden ? 'rotateX(180deg)' : 'rotateX(0deg)';
         };
     }
 
@@ -687,7 +786,19 @@ function updateResultsTable() {
             curr = Math.abs(curr);
         }
 
-        const label = `${getLabel(c.type)} (${c.x},${c.y})`;
+        let labelName = getLabel(c.type);
+        if (c.type === 'bulb') {
+            const ratings = {
+                '5': "1.5V-0.3A",
+                '8.33': "2.5V-0.3A",
+                '12.67': "3.8V-0.3A",
+                '42': "6.3V-0.15A",
+                '109': "12V-0.11A"
+            };
+            const ratingStr = ratings[c.value.toString()];
+            if (ratingStr) labelName = ratingStr;
+        }
+        const label = `${labelName} (${c.x},${c.y})`;
         if (tr.cells[0].innerText !== label) tr.cells[0].innerText = label;
         tr.cells[1].innerText = volt.toFixed(2);
         tr.cells[2].innerText = curr.toFixed(3);
@@ -1015,7 +1126,7 @@ function addComponent(type, x, y) {
         battery: 1.5,
         ac_source: 1.5,
         resistor: 10,
-        bulb: 10,
+        bulb: 5,
         capacitor: 10000,
         inductor: 1000,
         wire: 0,
@@ -1078,9 +1189,36 @@ function openEdit(id) {
             document.getElementById('input-group-switch').style.display = 'none';
             document.getElementById('comp-value').value = comp.value;
             const unit = { battery: 'V', ac_source: 'V', resistor: 'Ω', bulb: 'Ω', capacitor: 'μF', inductor: 'mH', voltmeter: 'Ω', ammeter: 'Ω' }[comp.type] || '';
-            const valLabel = { battery: '起電力:', ac_source: '振幅(V):', resistor: '抵抗値:', bulb: '抵抗値:', capacitor: '電気容量:', inductor: '自己インダクタンス:', voltmeter: '内部抵抗:', ammeter: '内部抵抗:' }[comp.type] || '値:';
+            const valLabel = { battery: '起電力', ac_source: '振幅(V)', resistor: '抵抗値', bulb: '抵抗値', capacitor: '電気容量', inductor: '自己インダクタンス', voltmeter: '内部抵抗', ammeter: '内部抵抗' }[comp.type] || '値';
             document.getElementById('comp-value-label').innerText = valLabel;
             document.getElementById('comp-unit').innerText = unit;
+
+            // 電球用のプリセットプルダウン制御
+            const bulbPresetsContainer = document.getElementById('bulb-presets-container');
+            const bulbPresetsSelect = document.getElementById('bulb-presets-select');
+            const bulbDetailsContent = document.getElementById('bulb-details-content');
+            const bulbToggleBtn = document.getElementById('modal-bulb-details-toggle');
+            
+            if (bulbPresetsContainer && bulbPresetsSelect) {
+                if (comp.type === 'bulb') {
+                    bulbPresetsContainer.style.display = 'block';
+                    if (bulbDetailsContent) bulbDetailsContent.style.display = 'none';
+                    if (bulbToggleBtn) {
+                        bulbToggleBtn.style.display = 'block';
+                        bulbToggleBtn.style.transform = 'rotate(0deg)';
+                    }
+                    // 現在の値に合わせてプルダウンを初期化
+                    const valStr = comp.value.toString();
+                    const options = Array.from(bulbPresetsSelect.options).map(o => o.value);
+                    if (options.includes(valStr)) {
+                        bulbPresetsSelect.value = valStr;
+                    }
+                } else {
+                    bulbPresetsContainer.style.display = 'none';
+                    if (bulbDetailsContent) bulbDetailsContent.style.display = 'block';
+                    if (bulbToggleBtn) bulbToggleBtn.style.display = 'none';
+                }
+            }
 
             // スライダーの設定
             const slider = document.getElementById('comp-value-slider');
@@ -1099,7 +1237,8 @@ function openEdit(id) {
                     if (comp.type === 'battery' || comp.type === 'ac_source') { min = 0.1; max = 50; step = 0.1; }
                     else if (comp.type === 'capacitor') { min = 1000; max = 100000; step = 1000; }
                     else if (comp.type === 'inductor') { min = 100; max = 10000; step = 100; }
-                    else if (comp.type === 'resistor' || comp.type === 'bulb') { min = 1; max = 100; step = 1; }
+                    else if (comp.type === 'resistor') { min = 1; max = 100; step = 1; }
+                    else if (comp.type === 'bulb') { min = 1; max = 120; step = 1; }
                     
                     slider.min = min;
                     slider.max = max;
@@ -1261,7 +1400,18 @@ function render() {
                 if (comp.type === 'voltmeter' || comp.type === 'ammeter') {
                     displayValueText = `0.00${unit}`;
                 } else {
-                    displayValueText = `${comp.value}${unit}`;
+                    if (comp.type === 'bulb') {
+                        const ratings = {
+                            '5': "1.5V-0.3A",
+                            '8.33': "2.5V-0.3A",
+                            '12.67': "3.8V-0.3A",
+                            '42': "6.3V-0.15A",
+                            '109': "12V-0.11A"
+                        };
+                        displayValueText = ratings[comp.value.toString()] || `${comp.value}${unit}`;
+                    } else {
+                        displayValueText = `${comp.value}${unit}`;
+                    }
                 }
             }
 
@@ -1399,6 +1549,7 @@ function startAnimation() {
         
         animTime += dt / timeScale; // keep for other global animations if needed
         renderParticles();
+        updateBulbVisuals(); // 2D電球のリアルタイム明滅を更新
         if (simulator3D.isActive) {
             simulator3D.updateParticles(components, simulationResults);
         }
@@ -1469,6 +1620,55 @@ function updateDynamicUI(currentDt) {
             graphAccumulatedTime = 0;
         }
     }
+}
+
+function updateBulbVisuals() {
+    if (!simulationResults || !simulationResults.currents) return;
+
+    // 全ての発光円を更新
+    const glows = document.querySelectorAll('.bulb-glow');
+    glows.forEach(glow => {
+        const bId = glow.getAttribute('data-comp-id');
+        const iVal = simulationResults.currents[bId] || 0;
+        
+        // 抵抗値 R を取得 (components配列から検索)
+        const comp = components.find(c => c.id === bId);
+        const R = comp ? (comp.value || 10) : 10; // デフォルト10Ω
+        
+        const power = iVal * iVal * R; // P = I^2 * R
+        const intensity = Math.sqrt(power); // Pの平方根
+        
+        // 半径 r = k * sqrt(P)
+        const k = (typeof appConfig !== 'undefined' && appConfig.bulbGlowK) ? appConfig.bulbGlowK : 30;
+        let radius = intensity * k;
+
+        // 上限と下限の適用
+        const minR = (typeof appConfig !== 'undefined' && appConfig.bulbGlowMinR) ? appConfig.bulbGlowMinR : 5;
+        const maxR = (typeof appConfig !== 'undefined' && appConfig.bulbGlowMaxR) ? appConfig.bulbGlowMaxR : 60;
+        
+        if (radius > maxR) radius = maxR;
+        
+        glow.setAttribute('r', radius);
+        // 下限を下回る場合は隠す
+        glow.style.display = radius >= minR ? 'block' : 'none';
+    });
+
+    // 全てのフィラメントを更新
+    const filaments = document.querySelectorAll('.bulb-filament');
+    filaments.forEach(fil => {
+        const bId = fil.getAttribute('data-comp-id');
+        const iVal = simulationResults.currents[bId] || 0;
+        
+        const comp = components.find(c => c.id === bId);
+        const R = comp ? (comp.value || 10) : 10;
+        const power = iVal * iVal * R;
+        const intensity = Math.min(Math.sqrt(power), 1.0);
+
+        const r = Math.round(73 + (255 - 73) * intensity);
+        const gValue = Math.round(80 + (255 - 80) * intensity);
+        const b = Math.round(87 + (255 - 87) * intensity);
+        fil.setAttribute('stroke', `rgb(${r},${gValue},${b})`);
+    });
 }
 
 function updateGraphLegend() {
@@ -1865,16 +2065,93 @@ function drawComponentVisual(comp) {
 
     switch (comp.type) {
         case 'battery':
-            path.setAttribute('d', 'M -30,0 L -6,0 M 6,0 L 30,0');
-            path.setAttribute('stroke-linecap', 'round');
-            const plates = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            plates.setAttribute('d', 'M -6,-18 L -6,18 M 6,-10 L 6,10');
-            plates.setAttribute('stroke', color);
-            plates.setAttribute('stroke-width', '4');
-            plates.setAttribute('fill', 'none');
-            plates.setAttribute('stroke-linecap', 'round');
-            g.appendChild(plates);
-            g.appendChild(path);
+            if (showIllustrations) {
+                // リアルな電池の描画 (実物風)
+                const batId = comp.id || 'ghost';
+                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                
+                // 本体のグラデーション (赤)
+                const gradBody = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                gradBody.setAttribute('id', `grad-battery-body-${batId}`);
+                gradBody.setAttribute('x1', '0%'); gradBody.setAttribute('y1', '0%');
+                gradBody.setAttribute('x2', '0%'); gradBody.setAttribute('y2', '100%');
+                gradBody.innerHTML = `
+                    <stop offset="0%" style="stop-color:#ff5c5c;stop-opacity:1" />
+                    <stop offset="30%" style="stop-color:#e03131;stop-opacity:1" />
+                    <stop offset="70%" style="stop-color:#c92a2a;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#a52828;stop-opacity:1" />
+                `;
+                
+                // 金属端子のグラデーション
+                const gradMetal = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                gradMetal.setAttribute('id', `grad-battery-metal-${batId}`);
+                gradMetal.setAttribute('x1', '0%'); gradMetal.setAttribute('y1', '0%');
+                gradMetal.setAttribute('x2', '0%'); gradMetal.setAttribute('y2', '100%');
+                gradMetal.innerHTML = `
+                    <stop offset="0%" style="stop-color:#f8f9fa;stop-opacity:1" />
+                    <stop offset="50%" style="stop-color:#adb5bd;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#495057;stop-opacity:1" />
+                `;
+                
+                defs.appendChild(gradBody);
+                defs.appendChild(gradMetal);
+                g.appendChild(defs);
+
+                // プラス端子（左・金属）: -28+3 = -25
+                const cap = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                cap.setAttribute('x', -25); cap.setAttribute('y', -8);
+                cap.setAttribute('width', 6); cap.setAttribute('height', 16);
+                cap.setAttribute('rx', 1);
+                cap.setAttribute('fill', `url(#grad-battery-metal-${batId})`);
+                
+                // 本体: -24+3 = -21
+                const body = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                body.setAttribute('x', -21); body.setAttribute('y', -16);
+                body.setAttribute('width', 46); body.setAttribute('height', 32);
+                body.setAttribute('rx', 2);
+                body.setAttribute('fill', `url(#grad-battery-body-${batId})`);
+                
+                // ハイライト (光の反射)
+                const highlight = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                highlight.setAttribute('x', -21); highlight.setAttribute('y', -12);
+                highlight.setAttribute('width', 46); highlight.setAttribute('height', 4);
+                highlight.setAttribute('fill', 'rgba(255,255,255,0.2)');
+                
+                // 文字盤
+                const textPlus = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                textPlus.setAttribute('x', -11); textPlus.setAttribute('y', 5);
+                textPlus.setAttribute('text-anchor', 'middle'); textPlus.setAttribute('fill', 'white');
+                textPlus.setAttribute('style', 'font: bold 16px Arial');
+                textPlus.textContent = '+';
+
+                // 稲妻マーク (Pathを右に3ずらす)
+                const bolt = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                bolt.setAttribute('d', 'M 8,-8 L 14,-1 L 10,-1 L 15,8 L 9,1 L 13,1 Z');
+                bolt.setAttribute('fill', 'rgba(255,255,255,0.8)');
+                
+                // 導線との接続点（左右5pxずつで均等化）
+                path.setAttribute('d', 'M -30,0 L -25,0 M 25,0 L 30,0');
+                g.appendChild(path);
+                
+                g.appendChild(cap);
+                g.appendChild(body);
+                g.appendChild(highlight);
+                g.appendChild(textPlus);
+                g.appendChild(bolt);
+                return g;
+            } else {
+                // 従来の図記号
+                path.setAttribute('d', 'M -30,0 L -6,0 M 6,0 L 30,0');
+                path.setAttribute('stroke-linecap', 'round');
+                const plates = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                plates.setAttribute('d', 'M -6,-18 L -6,18 M 6,-10 L 6,10');
+                plates.setAttribute('stroke', color);
+                plates.setAttribute('stroke-width', '4');
+                plates.setAttribute('fill', 'none');
+                plates.setAttribute('stroke-linecap', 'round');
+                g.appendChild(plates);
+                g.appendChild(path);
+            }
             break;
         case 'ac_source':
             path.setAttribute('d', 'M -30,0 L -18,0 M 18,0 L 30,0');
@@ -1889,15 +2166,61 @@ function drawComponentVisual(comp) {
             g.appendChild(path);
             break;
         case 'resistor':
-            path.setAttribute('d', 'M -30,0 L -15,0 M 15,0 L 30,0');
-            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-            rect.setAttribute('x', -15); rect.setAttribute('y', -7);
-            rect.setAttribute('width', 30); rect.setAttribute('height', 14);
-            rect.setAttribute('fill', 'var(--inner-fill)'); rect.setAttribute('stroke', color); rect.setAttribute('stroke-width', '2');
-            g.appendChild(rect);
-            g.appendChild(path);
-            addPassivePolarity(g, color);
-            return g;
+            if (showIllustrations) {
+                // リアルな抵抗器の描画
+                const resId = comp.id || 'ghost';
+                const resValue = (comp.value !== undefined) ? comp.value : 1000;
+                
+                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                const gradBody = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                gradBody.setAttribute('id', `grad-res-body-${resId}`);
+                gradBody.setAttribute('x1', '0%'); gradBody.setAttribute('y1', '0%');
+                gradBody.setAttribute('x2', '0%'); gradBody.setAttribute('y2', '100%');
+                gradBody.innerHTML = `
+                    <stop offset="0%" style="stop-color:#fdf5e6;stop-opacity:1" />
+                    <stop offset="50%" style="stop-color:#f5e1a4;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#e6d08a;stop-opacity:1" />
+                `;
+                defs.appendChild(gradBody);
+                g.appendChild(defs);
+
+                // 導線（リード線）: テーマに合わせて色を変更
+                path.setAttribute('d', 'M -30,0 L 30,0');
+                path.setAttribute('stroke', color);
+                path.setAttribute('stroke-width', '2');
+                g.appendChild(path);
+
+                // 本体 (ひょうたん型)
+                const body = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                body.setAttribute('x', -16); body.setAttribute('y', -7);
+                body.setAttribute('width', 32); body.setAttribute('height', 14);
+                body.setAttribute('rx', 5);
+                body.setAttribute('fill', `url(#grad-res-body-${resId})`);
+                g.appendChild(body);
+
+                // カラーバンド (抵抗値に基づいて動的に算出)
+                const resColors = getResistorColorBands(resValue);
+                const bandPositions = [-10, -5, 0, 8];
+                resColors.forEach((c, i) => {
+                    const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    r.setAttribute('x', bandPositions[i]); r.setAttribute('y', -7);
+                    r.setAttribute('width', 2.5); r.setAttribute('height', 14);
+                    r.setAttribute('fill', c);
+                    g.appendChild(r);
+                });
+                addPassivePolarity(g, color);
+                return g;
+            } else {
+                path.setAttribute('d', 'M -30,0 L -15,0 M 15,0 L 30,0');
+                const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                rect.setAttribute('x', -15); rect.setAttribute('y', -7);
+                rect.setAttribute('width', 30); rect.setAttribute('height', 14);
+                rect.setAttribute('fill', 'var(--inner-fill)'); rect.setAttribute('stroke', color); rect.setAttribute('stroke-width', '2');
+                g.appendChild(rect);
+                g.appendChild(path);
+                addPassivePolarity(g, color);
+                return g;
+            }
         case 'wire':
             path.setAttribute('d', 'M -30,0 L 30,0');
             g.appendChild(path);
@@ -1914,18 +2237,132 @@ function drawComponentVisual(comp) {
             g.appendChild(tDot);
             break;
         case 'bulb':
-            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            circle.setAttribute('cx', 0); circle.setAttribute('cy', 0); circle.setAttribute('r', 14);
-            circle.setAttribute('fill', 'var(--inner-fill)');
-            circle.setAttribute('stroke', color); circle.setAttribute('stroke-width', '2');
-            path.setAttribute('d', 'M -9.9,-9.9 L 9.9,9.9 M -9.9,9.9 L 9.9,-9.9 M -30,0 L -14,0 M 14,0 L 30,0');
-            const bulbLight = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            bulbLight.setAttribute('cx', 0); bulbLight.setAttribute('cy', 0); bulbLight.setAttribute('r', 14);
-            bulbLight.setAttribute('fill', `rgba(255, 255, 0, ${Math.min(bulbIntensity * 0.5, 0.8)})`);
-            g.appendChild(circle); g.appendChild(bulbLight);
-            g.appendChild(path);
-            addPassivePolarity(g, color);
-            break;
+            if (showIllustrations) {
+                const bId = comp.id || 'ghost';
+                const intensity = Math.min(bulbIntensity * 2, 1); // 発光強度
+                const isLit = intensity > 0.01;
+                
+                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                
+                // ガラスのグラデーション (常に消灯状態の見た目)
+                const gradGlass = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
+                gradGlass.setAttribute('id', `grad-bulb-glass-${bId}`);
+                gradGlass.setAttribute('cx', '30%'); gradGlass.setAttribute('cy', '30%');
+                gradGlass.setAttribute('r', '50%');
+                gradGlass.innerHTML = `
+                    <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.8" />
+                    <stop offset="100%" style="stop-color:#dee2e6;stop-opacity:0.2" />
+                `;
+                
+                // 金属口金のグラデーション
+                const gradBase = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                gradBase.setAttribute('id', `grad-bulb-base-${bId}`);
+                gradBase.setAttribute('x1', '0%'); gradBase.setAttribute('y1', '0%');
+                gradBase.setAttribute('x2', '100%'); gradBase.setAttribute('y2', '0%');
+                gradBase.innerHTML = `
+                    <stop offset="0%" style="stop-color:#868e96;stop-opacity:1" />
+                    <stop offset="50%" style="stop-color:#ced4da;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#495057;stop-opacity:1" />
+                `;
+                
+                defs.appendChild(gradGlass);
+                defs.appendChild(gradBase);
+                g.appendChild(defs);
+
+                // 導線 (リード線: 左は底面、右は側面へ)
+                path.setAttribute('d', 'M -30,0 L -15,0 L -15,20.5 L -5,20.5 M 30,0 L 15,0 L 15,10 L 9,10');
+                g.appendChild(path);
+
+                // 口金 (ソケット・ネジ部分)
+                const baseGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+                
+                // 口金本体
+                const base = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                base.setAttribute('x', -9); base.setAttribute('y', 1); // -4 -> 1 下げた
+                base.setAttribute('width', 18); base.setAttribute('height', 18);
+                base.setAttribute('rx', 2);
+                base.setAttribute('fill', `url(#grad-bulb-base-${bId})`);
+                baseGroup.appendChild(base);
+
+                // ネジ模様 (スレッド)
+                for (let i = 0; i < 4; i++) {
+                    const thread = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    const ty = 4 + i * 4; // 位置を下げた
+                    thread.setAttribute('d', `M -9,${ty} Q 0,${ty + 1} 9,${ty}`);
+                    thread.setAttribute('fill', 'none');
+                    thread.setAttribute('stroke', 'rgba(0,0,0,0.2)');
+                    thread.setAttribute('stroke-width', '1');
+                    baseGroup.appendChild(thread);
+                }
+                
+                // 先端の接触点
+                const tip = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                tip.setAttribute('x', -5); tip.setAttribute('y', 19); // 14 -> 19
+                tip.setAttribute('width', 10); tip.setAttribute('height', 3);
+                tip.setAttribute('fill', '#495057');
+                baseGroup.appendChild(tip);
+
+                g.appendChild(baseGroup);
+
+                // ガラス球 (色は固定)
+                const glass = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                glass.setAttribute('cx', 0); glass.setAttribute('cy', -10);
+                glass.setAttribute('r', 15);
+                glass.setAttribute('fill', `url(#grad-bulb-glass-${bId})`);
+                glass.setAttribute('stroke', 'rgba(173, 181, 189, 0.5)'); // 常に枠線あり
+                glass.setAttribute('stroke-width', '1');
+                g.appendChild(glass);
+
+                // フィラメント (位置を下げ、上端を中心より少し上に配置)
+                const filament = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                filament.setAttribute('d', 'M -5,-6 C -5,-13 5,-13 5,-6');
+                filament.setAttribute('fill', 'none');
+                filament.setAttribute('class', 'bulb-filament'); // クラス追加
+                filament.setAttribute('data-comp-id', bId); // ID追加
+                const r = Math.round(73 + (255 - 73) * intensity);
+                const gValue = Math.round(80 + (255 - 80) * intensity);
+                const b = Math.round(87 + (255 - 87) * intensity);
+                filament.setAttribute('stroke', `rgb(${r},${gValue},${b})`);
+                filament.setAttribute('stroke-width', '2');
+                g.appendChild(filament);
+
+                // 発光用のグラデーション (透明度は最大輝度で固定)
+                const gradGlow = document.createElementNS('http://www.w3.org/2000/svg', 'radialGradient');
+                gradGlow.setAttribute('id', `grad-bulb-glow-${bId}`);
+                gradGlow.setAttribute('cx', '50%'); gradGlow.setAttribute('cy', '50%');
+                gradGlow.setAttribute('r', '50%');
+                gradGlow.innerHTML = `
+                    <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.9" />
+                    <stop offset="33.3%" style="stop-color:#ffffff;stop-opacity:0.9" />
+                    <stop offset="100%" style="stop-color:#ffff00;stop-opacity:0" />
+                `;
+                defs.appendChild(gradGlow);
+                g.appendChild(defs);
+
+                // 新しい発光エフェクト (常時生成し、半径0〜45で明滅を表現)
+                const brightGlow = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                brightGlow.setAttribute('cx', 0); brightGlow.setAttribute('cy', -10);
+                brightGlow.setAttribute('class', 'bulb-glow');
+                brightGlow.setAttribute('data-comp-id', bId);
+                brightGlow.setAttribute('r', intensity * 45); 
+                brightGlow.setAttribute('fill', `url(#grad-bulb-glow-${bId})`);
+                brightGlow.setAttribute('pointer-events', 'none');
+                brightGlow.style.display = intensity > 0.001 ? 'block' : 'none';
+                g.appendChild(brightGlow);
+
+                addPassivePolarity(g, color);
+                return g;
+            } else {
+                const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                circle.setAttribute('cx', 0); circle.setAttribute('cy', 0); circle.setAttribute('r', 14);
+                circle.setAttribute('fill', 'var(--inner-fill)');
+                circle.setAttribute('stroke', color); circle.setAttribute('stroke-width', '2');
+                path.setAttribute('d', 'M -9.9,-9.9 L 9.9,9.9 M -9.9,9.9 L 9.9,-9.9 M -30,0 L -14,0 M 14,0 L 30,0');
+                g.appendChild(circle);
+                g.appendChild(path);
+                addPassivePolarity(g, color);
+                break;
+            }
         case 'capacitor':
             path.setAttribute('d', 'M -30,0 L -6,0 M 6,0 L 30,0');
             path.setAttribute('stroke-linecap', 'round');
@@ -2270,6 +2707,138 @@ if (trashCan && clearConfirmModal && clearConfirmBackdrop) {
     clearConfirmBackdrop.onclick = () => {
         clearConfirmModal.style.display = 'none';
         clearConfirmBackdrop.style.display = 'none';
+    };
+}
+
+// ツールバーアイコンを更新する関数
+function updateToolbarIcons() {
+    const batteryIconBox = document.querySelector('.tool-item[data-type="battery"] .icon-box');
+    if (batteryIconBox) {
+        if (showIllustrations) {
+            batteryIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <defs>
+                        <linearGradient id="grad-icon-body" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#ff5c5c;stop-opacity:1" />
+                            <stop offset="30%" style="stop-color:#e03131;stop-opacity:1" />
+                            <stop offset="70%" style="stop-color:#c92a2a;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#a52828;stop-opacity:1" />
+                        </linearGradient>
+                        <linearGradient id="grad-icon-metal" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#f8f9fa;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#adb5bd;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#495057;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M -30,0 L -22,0 M 22,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" />
+                    <rect x="-22" y="-8" width="6" height="16" rx="1" fill="url(#grad-icon-metal)" />
+                    <rect x="-18" y="-14" width="40" height="28" rx="2" fill="url(#grad-icon-body)" />
+                    <rect x="-18" y="-11" width="40" height="3" fill="rgba(255,255,255,0.2)" />
+                    <text x="-8" y="5" text-anchor="middle" fill="white" style="font: bold 12px Arial; stroke:none;">+</text>
+                    <path d="M 8,-6 L 13,-1 L 10,-1 L 14,6 L 9,1 L 12,1 Z" fill="rgba(255,255,255,0.9)" style="stroke:none;" />
+                </svg>
+            `;
+        } else {
+            batteryIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <path d="M -30,0 L -6,0 M 6,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
+                    <path d="M -6,-18 L -6,18 M 6,-10 L 6,10" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round" />
+                </svg>
+            `;
+        }
+    }
+
+    const resIconBox = document.querySelector('.tool-item[data-type="resistor"] .icon-box');
+    if (resIconBox) {
+        if (showIllustrations) {
+            resIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <defs>
+                        <linearGradient id="grad-icon-res" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#fdf5e6;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#f5e1a4;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#e6d08a;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M -30,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" />
+                    <rect x="-16" y="-7" width="32" height="14" rx="5" fill="url(#grad-icon-res)" />
+                    <rect x="-10" y="-7" width="2.5" height="14" fill="#8b4513" />
+                    <rect x="-5" y="-7" width="2.5" height="14" fill="#000000" />
+                    <rect x="0" y="-7" width="2.5" height="14" fill="#ff0000" />
+                    <rect x="8" y="-7" width="2.5" height="14" fill="#ffd700" />
+                    <!-- 極性マーク (電球に倣ったデザイン) -->
+                    <circle class="passive-polarity" cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                    <circle class="passive-polarity" cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
+                </svg>
+            `;
+        } else {
+            resIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <path d="M -30,0 L -15,0 M 15,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" />
+                    <rect x="-15" y="-7" width="30" height="14" fill="var(--inner-fill, white)" stroke="currentColor" stroke-width="2" />
+                    <!-- 極性マーク (電球に倣ったデザイン) -->
+                    <circle class="passive-polarity" cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                    <circle class="passive-polarity" cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
+                </svg>
+            `;
+        }
+    }
+
+    const bulbIconBox = document.querySelector('.tool-item[data-type="bulb"] .icon-box');
+    if (bulbIconBox) {
+        if (showIllustrations) {
+            bulbIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <defs>
+                        <radialGradient id="grad-icon-bulb-glass" cx="30%" cy="30%" r="50%">
+                            <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.8" />
+                            <stop offset="100%" style="stop-color:#dee2e6;stop-opacity:0.3" />
+                        </radialGradient>
+                        <linearGradient id="grad-icon-bulb-base" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" style="stop-color:#868e96;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#ced4da;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#495057;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M -30,0 L -15,0 L -15,16 L -5,16 M 30,0 L 15,0 L 15,7 L 9,7" stroke="currentColor" stroke-width="2" fill="none" />
+                    <rect x="-9" y="1" width="18" height="15" rx="2" fill="url(#grad-icon-bulb-base)" />
+                    <!-- ネジ模様 -->
+                    <path d="M -9,4 Q 0,5 9,4" fill="none" stroke="rgba(0,0,0,0.2)" stroke-width="1" />
+                    <path d="M -9,8 Q 0,9 9,8" fill="none" stroke="rgba(0,0,0,0.2)" stroke-width="1" />
+                    <path d="M -9,12 Q 0,13 9,12" fill="none" stroke="rgba(0,0,0,0.2)" stroke-width="1" />
+                    <rect x="-5" y="16" width="10" height="2" fill="#495057" />
+                    
+                    <circle cx="0" cy="-10" r="14" fill="url(#grad-icon-bulb-glass)" stroke="rgba(173, 181, 189, 0.5)" stroke-width="1" />
+                    <path d="M -5,-10 C -5,-16 5,-16 5,-10" fill="none" stroke="#495057" stroke-width="2" />
+                    <!-- 極性マーク -->
+                    <circle class="passive-polarity" cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                    <circle class="passive-polarity" cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
+                </svg>
+            `;
+        } else {
+            bulbIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <circle cx="0" cy="0" r="14" fill="var(--inner-fill)" stroke="currentColor" stroke-width="2" />
+                    <path d="M -9.9,-9.9 L 9.9,9.9 M -9.9,9.9 L 9.9,-9.9 M -30,0 L -14,0 M 14,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" />
+                    <!-- 極性マーク -->
+                    <circle class="passive-polarity" cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                    <circle class="passive-polarity" cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
+                </svg>
+            `;
+        }
+    }
+}
+
+// 下部ツールバーのイラスト表示ボタン
+const illCheck = document.getElementById('illustration-checkbox');
+if (illCheck) {
+    illCheck.onchange = () => {
+        showIllustrations = illCheck.checked;
+        updateToolbarIcons();
+        render();
+        if (typeof simulator3D !== 'undefined' && simulator3D.isActive) {
+            simulator3D.update(components, simulationResults);
+        }
     };
 }
 

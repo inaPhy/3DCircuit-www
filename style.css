@@ -152,8 +152,6 @@ body {
 .icon-box svg {
     width: 60%;
     height: 60%;
-    stroke: var(--text-primary);
-    stroke-width: 2;
 }
 
 /* ワークスペース */
@@ -599,6 +597,18 @@ input[type=range]::-moz-range-thumb {
 .text-on { display: none; }
 input:checked + .toggle-icon .text-off { display: none; }
 input:checked + .toggle-icon .text-on { display: block; }
+
+/* イラスト表示ボタン専用（赤色） */
+#illustration-checkbox + .toggle-icon rect {
+    fill: #ff5c5c; /* 常に明るい赤 */
+    transition: fill 0.3s;
+}
+#illustration-checkbox:checked + .toggle-icon rect {
+    fill: #ff5c5c; /* ON時も同じ明るい赤 */
+}
+#illustration-checkbox:checked + .toggle-icon {
+    box-shadow: inset 2px 2px 6px rgba(0,0,0,0.6), inset -1px -1px 3px rgba(255,255,255,0.2);
+}
 
 /* グラフ専用スライダーのスタイル */
 #graph-v-range-slider, #graph-i-range-slider {

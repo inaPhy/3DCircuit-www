@@ -1,3 +1,16 @@
+// 抵抗器のカラーコード算出ヘルパー (3D用)
+function getResistorColorBands3D(value) {
+    const colors = ['#000000', '#8b4513', '#ff0000', '#ffa500', '#ffff00', '#008000', '#0000ff', '#ee82ee', '#808080', '#ffffff'];
+    if (value <= 0) return [colors[0], colors[0], colors[0], '#ffd700'];
+    const s = value.toExponential().split('e');
+    let d1 = Math.floor(parseFloat(s[0]));
+    let d2 = Math.round((parseFloat(s[0]) - d1) * 10);
+    let multiplier = parseInt(s[1]) - 1;
+    if (d2 >= 10) { d1++; d2 = 0; if (d1 >= 10) { d1 = 1; multiplier++; } }
+    let mColor = (multiplier === -1) ? '#ffd700' : (multiplier === -2 ? '#c0c0c0' : (multiplier >= 0 && multiplier <= 9 ? colors[multiplier] : colors[0]));
+    return [colors[Math.max(0, Math.min(9, d1))], colors[Math.max(0, Math.min(9, d2))], mColor, '#ffd700'];
+}
+
 class Simulator3D {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
@@ -164,6 +177,7 @@ class Simulator3D {
         if (!this.isActive || !this.scene || !simulationResults || !components) return;
 
         this.circuitComponents = components;
+        this.simulationResults = simulationResults;
 
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         this.circuitComponents.forEach(comp => {
@@ -410,9 +424,21 @@ class Simulator3D {
             const mesh = new THREE.Mesh(topGeometry, topMaterial);
             mesh.userData.comp = comp;
 
+            // 点灯状態の判定 (電球の場合)
+            let isBulbLit = false;
+            if (comp.type === 'bulb') {
+                const current = Math.abs(simulationResults.currents[comp.id] || 0);
+                if (current > 0.01) isBulbLit = true;
+            }
+
             // パネルの周りは実線
             const topEdges = new THREE.EdgesGeometry(topGeometry);
-            const topLines = new THREE.LineSegments(topEdges, new THREE.LineBasicMaterial({ color: 0x555555, opacity: 0.4, transparent: true }));
+            const topLines = new THREE.LineSegments(topEdges, new THREE.LineBasicMaterial({ 
+                color: 0x555555, 
+                opacity: 0.4, 
+                transparent: true
+            }));
+            topLines.visible = !isBulbLit; // 点灯中は非表示
             mesh.add(topLines);
 
             // 高さに当たる側面は点線
@@ -425,22 +451,37 @@ class Simulator3D {
                 gapSize: 3
             }));
             wallLines.computeLineDistances();
+            wallLines.visible = !isBulbLit; // 点灯中は非表示
             mesh.add(wallLines);
 
             mesh.userData.lines = [topLines, wallLines];
 
             this.scene.add(mesh);
             this.meshes.push(mesh);
+
         });
     }
 
     getComponentTexture(comp, isHighlighted = false) {
         const isDarkMode = !document.documentElement.classList.contains('light-mode');
-        // Simple caching based on type, rotation, state, and theme
-        const stateKey = comp.type === 'switch' ? (comp.value === 1 ? "on" : "off") : "";
+        // Simple caching based on type, rotation, state, theme, and illustration mode
+        let stateValue = 0;
+        if (comp.type === 'switch') stateValue = comp.value;
+        else if (comp.type === 'bulb' && this.simulationResults) {
+            stateValue = Math.abs(this.simulationResults.currents[comp.id] || 0);
+        }
+        
+        const stateKey = (comp.type === 'switch' || comp.type === 'bulb') ? (stateValue > 0.01 ? "on" : "off") : "";
         const themeKey = isDarkMode ? "dark" : "light";
-        const key = comp.type + "_" + comp.rotation + "_" + stateKey + "_" + themeKey + (isHighlighted ? "_hl" : "");
+        const illKey = (typeof showIllustrations !== 'undefined' && showIllustrations) ? "ill_v29" : "sym_v29";
+        // キャッシュキーに値を加える (抵抗値などの変化に対応)
+        const valKey = (comp.type === 'resistor' || comp.type === 'battery') ? "_" + comp.value : "";
+        const state = stateValue; // 描画ロジック用
+        const key = comp.type + "_" + comp.rotation + "_" + stateKey + "_" + themeKey + "_" + illKey + valKey + (isHighlighted ? "_hl" : "");
         if (this.textureParams[key]) return this.textureParams[key];
+
+        // 導線などの基本色を定義 (未定義エラー回避)
+        const color = isDarkMode ? "#ffffff" : "#000000";
 
         const canvas = document.createElement('canvas');
         canvas.width = 128;
@@ -460,7 +501,7 @@ class Simulator3D {
         
         ctx.fillRect(0, 0, 128, 128);
 
-        ctx.strokeStyle = '#000';
+        ctx.strokeStyle = color;
         ctx.lineWidth = 6;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
@@ -480,22 +521,124 @@ class Simulator3D {
             ctx.stroke(); ctx.beginPath();
             ctx.fillStyle = '#000'; ctx.arc(0,0,4,0,Math.PI*2); ctx.fill();
         } else if (comp.type === 'resistor') {
-            ctx.moveTo(-64, 0); ctx.lineTo(-30, 0);
-            ctx.moveTo(30, 0); ctx.lineTo(64, 0);
-            ctx.stroke(); ctx.beginPath();
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(-30, -15, 60, 30);
-            ctx.strokeRect(-30, -15, 60, 30);
+            if (typeof showIllustrations !== 'undefined' && showIllustrations) {
+                // イラスト描画 (3D用テクスチャ: リアルな抵抗器)
+                
+                // 導線を最初に描画
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 6;
+                ctx.moveTo(-64, 0); ctx.lineTo(64, 0);
+                ctx.stroke();
+
+                // 本体のグラデーション (ベージュ)
+                const gradBody = ctx.createLinearGradient(0, -20, 0, 20);
+                gradBody.addColorStop(0, '#fdf5e6');
+                gradBody.addColorStop(0.5, '#f5e1a4');
+                gradBody.addColorStop(1, '#e6d08a');
+
+                // 本体
+                ctx.fillStyle = gradBody;
+                ctx.strokeStyle = 'rgba(0,0,0,0)'; // 枠線を確実に無効化
+                ctx.beginPath();
+                const rx = -40, ry = -20, rw = 80, rh = 40, rr = 15;
+                ctx.moveTo(rx + rr, ry);
+                ctx.arcTo(rx + rw, ry, rx + rw, ry + rh, rr);
+                ctx.arcTo(rx + rw, ry + rh, rx, ry + rh, rr);
+                ctx.arcTo(rx, ry + rh, rx, ry, rr);
+                ctx.arcTo(rx, ry, rx + rw, ry, rr);
+                ctx.closePath();
+                ctx.fill();
+
+                // カラーバンド (動的算出)
+                const resColors = getResistorColorBands3D(comp.value);
+                const bandX = [-25, -10, 5, 25];
+                resColors.forEach((c, i) => {
+                    ctx.fillStyle = c;
+                    ctx.fillRect(bandX[i], -20, 6, 40);
+                });
+                
+                // ハイライト
+                ctx.fillStyle = 'rgba(255,255,255,0.1)';
+                ctx.fillRect(-40, -15, 80, 6);
+            } else {
+                ctx.moveTo(-64, 0); ctx.lineTo(-30, 0);
+                ctx.moveTo(30, 0); ctx.lineTo(64, 0);
+                ctx.stroke(); ctx.beginPath();
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(-30, -15, 60, 30);
+                ctx.strokeRect(-30, -15, 60, 30);
+            }
         } else if (comp.type === 'battery') {
-            ctx.moveTo(-64, 0); ctx.lineTo(-15, 0);
-            ctx.moveTo(15, 0); ctx.lineTo(64, 0);
-            ctx.stroke(); ctx.beginPath();
-            
-            ctx.lineWidth = 9; // 9pxに微調整
-            ctx.moveTo(-15, -30); ctx.lineTo(-15, 30); // 長い極板
-            ctx.moveTo(15, -16); ctx.lineTo(15, 16);   // 短い極板
-            ctx.stroke(); ctx.beginPath();
-            ctx.lineWidth = 6; // 元に戻す
+            if (typeof showIllustrations !== 'undefined' && showIllustrations) {
+                // イラスト描画 (3D用テクスチャ: リアルな実物風デザイン)
+                
+                // 導線を最初に描画 (重なりの一番下、左右均等化)
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 6;
+                ctx.moveTo(-64, 0); ctx.lineTo(-50.5, 0);
+                ctx.moveTo(50.5, 0); ctx.lineTo(64, 0);
+                ctx.stroke(); ctx.beginPath();
+
+                // 本体のグラデーション (赤)
+                const gradBody = ctx.createLinearGradient(0, -32, 0, 32);
+                gradBody.addColorStop(0, '#ff5c5c');
+                gradBody.addColorStop(0.3, '#e03131');
+                gradBody.addColorStop(0.7, '#c92a2a');
+                gradBody.addColorStop(1, '#a52828');
+                
+                // 金属端子のグラデーション
+                const gradMetal = ctx.createLinearGradient(0, -12, 0, 12);
+                gradMetal.addColorStop(0, '#f8f9fa');
+                gradMetal.addColorStop(0.5, '#adb5bd');
+                gradMetal.addColorStop(1, '#495057');
+
+                // プラス端子（左側の金属突起）: -56+5.5 = -50.5
+                ctx.fillStyle = gradMetal;
+                ctx.fillRect(-50.5, -12, 11, 24);
+                
+                // 本体: -45+5.5 = -39.5
+                ctx.fillStyle = gradBody;
+                ctx.fillRect(-39.5, -32, 90, 64);
+                
+                // ハイライト
+                ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                ctx.fillRect(-39.5, -24, 90, 8);
+                
+                // 記号と稲妻
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 32px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('+', -19.5, 5);
+                
+                // 稲妻マークの描画 (5.5ずらす)
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0)';
+                ctx.lineWidth = 0;
+                ctx.beginPath();
+                ctx.moveTo(20.5, -15);
+                ctx.lineTo(35.5, -2);
+                ctx.lineTo(27.5, -2);
+                ctx.lineTo(37.5, 16);
+                ctx.lineTo(22.5, 3);
+                ctx.lineTo(30.5, 3);
+                ctx.closePath();
+                ctx.fill();
+            } else {
+                // シンボル描画 (ver2.0確定デザインの完全復元)
+                ctx.lineWidth = 6;
+                ctx.moveTo(-64, 0); ctx.lineTo(-15, 0);
+                ctx.moveTo(15, 0); ctx.lineTo(64, 0);
+                ctx.stroke(); ctx.beginPath();
+                
+                ctx.lineWidth = 9; // 以前決定した最適な太さ
+                ctx.moveTo(-15, -30); ctx.lineTo(-15, 30); // 長い極板
+                ctx.moveTo(15, -16); ctx.lineTo(15, 16);   // 短い極板
+                ctx.stroke(); ctx.beginPath();
+                ctx.lineWidth = 6;
+            }
         } else if (comp.type === 'ac_source') {
             ctx.moveTo(-64, 0); ctx.lineTo(-36, 0);
             ctx.moveTo(36, 0); ctx.lineTo(64, 0);
@@ -535,14 +678,81 @@ class Simulator3D {
             }
             ctx.arc(15,0,5,0,Math.PI*2); ctx.fill(); ctx.beginPath();
         } else if (comp.type === 'bulb') {
-            ctx.moveTo(-64, 0); ctx.lineTo(-28, 0);
-            ctx.moveTo(28, 0); ctx.lineTo(64, 0);
-            ctx.stroke(); ctx.beginPath();
-            ctx.fillStyle = '#ffffff';
-            ctx.arc(0, 0, 28, 0, Math.PI*2);
-            ctx.fill(); ctx.stroke(); ctx.beginPath();
-            ctx.moveTo(-18, -18); ctx.lineTo(18, 18);
-            ctx.moveTo(-18, 18); ctx.lineTo(18, -18);
+            if (typeof showIllustrations !== 'undefined' && showIllustrations) {
+                const isLit = state > 0.01;
+                const intensity = Math.min(state * 2, 1);
+
+                // 導線
+                ctx.save();
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 6;
+                ctx.moveTo(-64, 0); ctx.lineTo(-40, 0); ctx.lineTo(-40, 39); ctx.lineTo(-8, 39);
+                ctx.moveTo(64, 0); ctx.lineTo(40, 0); ctx.lineTo(40, 19); ctx.lineTo(15, 19);
+                ctx.stroke();
+                ctx.restore();
+
+                // 金属口金
+                ctx.save();
+                const gradBase = ctx.createLinearGradient(-15, 0, 15, 0);
+                gradBase.addColorStop(0, '#868e96');
+                gradBase.addColorStop(0.5, '#ced4da');
+                gradBase.addColorStop(1, '#495057');
+                ctx.fillStyle = gradBase;
+                ctx.fillRect(-15, 2, 30, 34);
+                // ネジ模様
+                ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+                ctx.lineWidth = 2;
+                for (let i = 0; i < 4; i++) {
+                    ctx.beginPath();
+                    const ty = 8 + i * 8;
+                    ctx.moveTo(-15, ty);
+                    ctx.quadraticCurveTo(0, ty + 2, 15, ty);
+                    ctx.stroke();
+                }
+                ctx.fillStyle = '#343a40';
+                ctx.fillRect(-8, 36, 16, 6);
+                ctx.restore();
+
+                // ガラス球 (色は固定)
+                ctx.save();
+                ctx.beginPath();
+                const gradGlass = ctx.createRadialGradient(-8, -26, 4, 0, -20, 30);
+                gradGlass.addColorStop(0, '#ffffff');
+                gradGlass.addColorStop(1, '#adb5bd');
+                ctx.fillStyle = gradGlass;
+                ctx.strokeStyle = 'rgba(0,0,0,0)';
+                ctx.lineWidth = 0;
+                ctx.globalAlpha = 0.6; // 常に少し透明
+                ctx.arc(0, -20, 30, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+
+                // フィラメント (明るさに応じて白くなる)
+                ctx.save();
+                ctx.beginPath();
+                const r_f = Math.round(52 + (255 - 52) * intensity);
+                const g_f = Math.round(58 + (255 - 58) * intensity);
+                const b_f = Math.round(64 + (255 - 64) * intensity);
+                ctx.strokeStyle = `rgb(${r_f},${g_f},${b_f})`;
+                ctx.lineWidth = 4;
+                ctx.moveTo(-10, -12);
+                ctx.bezierCurveTo(-10, -26, 10, -26, 10, -12);
+                ctx.stroke();
+                ctx.restore();
+
+                // 3D用の発光感 (オーバーレイ) - 外部メッシュ方式に移行したため削除
+                ctx.beginPath(); // パスをリセット
+            } else {
+                ctx.moveTo(-64, 0); ctx.lineTo(-28, 0);
+                ctx.moveTo(28, 0); ctx.lineTo(64, 0);
+                ctx.stroke(); ctx.beginPath();
+                ctx.fillStyle = '#ffffff';
+                ctx.arc(0, 0, 28, 0, Math.PI*2);
+                ctx.fill(); ctx.stroke(); ctx.beginPath();
+                ctx.moveTo(-18, -18); ctx.lineTo(18, 18);
+                ctx.moveTo(-18, 18); ctx.lineTo(18, -18);
+            }
         } else if (comp.type === 'inductor') {
             ctx.moveTo(-64, 0); ctx.lineTo(-30, 0);
             // 4つの山を等間隔で描画 (幅60を15ずつに分割し半径7.5)
