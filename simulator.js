@@ -102,17 +102,20 @@ class Simulator {
 
                 islandSources.forEach(s => {
                     let nPos = null, nNeg = null;
+                    let weight = 1; // デフォルト（蓄電素子など）
                     if (s.type === 'battery' || s.type === 'ac_source') {
                         nPos = s.nodes[0]; nNeg = s.nodes[1];
+                        weight = 10; // 電源系は優先度を高くする
                     } else {
                         const vprev = this.history.voltages[s.id] || 0;
                         if (Math.abs(vprev) > 1e-6) {
                             nPos = vprev > 0 ? s.nodes[0] : s.nodes[1];
                             nNeg = vprev > 0 ? s.nodes[1] : s.nodes[0];
+                            weight = 1; // 蓄電素子は優先度低
                         }
                     }
-                    if (nPos && nodeScores.has(nPos)) nodeScores.set(nPos, nodeScores.get(nPos) - 1);
-                    if (nNeg && nodeScores.has(nNeg)) nodeScores.set(nNeg, nodeScores.get(nNeg) + 1);
+                    if (nPos && nodeScores.has(nPos)) nodeScores.set(nPos, nodeScores.get(nPos) - weight);
+                    if (nNeg && nodeScores.has(nNeg)) nodeScores.set(nNeg, nodeScores.get(nNeg) + weight);
                 });
 
                 let anchorNode = null;
