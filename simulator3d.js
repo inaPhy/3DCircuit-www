@@ -351,7 +351,10 @@ class Simulator3D {
                         profile = [[0, vStart], [0.49, vStart], [0.5, vEnd - vIr], [1, vEnd]];
                     }
                 }
-            } else if (['capacitor', 'switch'].includes(comp.type)) {
+            } else if (comp.type === 'capacitor') {
+                // 極板の線に干渉しない安全圏(0.43, 0.57)を斜面にする
+                profile = [[0, vStart], [0.43, vStart], [0.57, vEnd], [1, vEnd]];
+            } else if (comp.type === 'switch') {
                 profile = [[0, vStart], [0.49, vStart], [0.51, vEnd], [1, vEnd]];
             } else {
                 profile = [[0, vStart], [1, vEnd]];

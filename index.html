@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Circuit www (ver2.56)</title>
+    <title>3D Circuit www (ver2.58)</title>
     <link rel="stylesheet" href="style.css">
     <!-- Google Fonts -->
     <link
@@ -199,15 +199,15 @@
 
         <!-- ツールバー設定用の背景オーバーレイ -->
         <div id="toolbar-settings-backdrop"
-            style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:190;">
+            style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:3400;">
         </div>
 
         <!-- 全消去確認ダイアログ -->
         <div id="clear-confirm-backdrop"
-            style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:210;">
+            style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); z-index:4900;">
         </div>
         <div id="clear-confirm-modal" class="results-panel"
-            style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:260px; z-index:220; padding:20px; text-align:center; background:#ffffff; color:#333; border: 1px solid #ddd; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
+            style="display:none; position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:260px; z-index:5000; padding:20px; text-align:center; background:#ffffff; color:#333; border: 1px solid #ddd; box-shadow: 0 8px 32px rgba(0,0,0,0.2);">
             <h4 style="margin:0 0 15px 0; font-size:16px;">まとめてリサイクル？</h4>
             <div style="display:flex; gap:15px; justify-content:center;">
                 <button id="clear-yes-btn" class="ok-button"
@@ -218,8 +218,7 @@
         </div>
 
         <!-- ツールバー表示設定パネル -->
-        <div id="toolbar-settings-panel" class="results-panel"
-            style="display:none; position: fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:240px; z-index:200;">
+        <div id="toolbar-settings-panel" class="results-panel">
             <div
                 style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--glass-border); padding-bottom:5px; margin-bottom:10px;">
                 <h4 style="margin:0; font-size:14px;">設定</h4>
@@ -537,8 +536,7 @@
                 </div>
                 <div class="input-group" id="input-group-switch" style="display: none; margin-top: 5px;">
                     <label for="comp-switch-val">状態:</label>
-                    <select id="comp-switch-val"
-                        style="padding: 5px; border-radius: 4px; background: rgba(255,255,255,0.1); color: white; border: 1px solid var(--glass-border); width: 120px;">
+                    <select id="comp-switch-val" style="width: 120px;">
                         <option value="1">ON (結線)</option>
                         <option value="0">OFF (切断)</option>
                     </select>
@@ -586,12 +584,12 @@
         </div>
 
         <!-- 結果一覧パネル -->
-        <div id="results-panel" class="results-panel" style="display:none; top:70px; right:20px;">
+        <div id="results-panel" class="results-panel">
             <div id="results-panel-header"
                 style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--glass-border); padding-bottom:5px; margin-bottom:10px; cursor:move;">
                 <h4 style="margin:0; pointer-events:none;">解析結果</h4>
                 <span id="close-results-btn"
-                    style="cursor:pointer; font-size:20px; font-weight:bold; color:var(--text-primary); width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background-color: rgba(0,0,0,0.1); border-radius: 50%; line-height:1;">&times;</span>
+                    style="cursor:pointer; font-size:20px; font-weight:bold; color:#333333; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; background-color: rgba(0,0,0,0.1); border-radius: 50%; line-height:1;">&times;</span>
             </div>
             <table id="results-table">
                 <thead>
@@ -606,17 +604,17 @@
         </div>
 
         <!-- 電圧グラフパネル -->
-        <div id="voltage-graph-panel" class="results-panel" style="display:none; top:320px; right:20px; width:350px;">
+        <div id="voltage-graph-panel" class="results-panel">
             <div id="voltage-graph-header"
                 style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--glass-border); padding-bottom:5px; margin-bottom:10px; cursor:move;">
                 <h4 id="voltage-graph-title" style="margin:0; pointer-events:none; font-size: 14px; color:#fab005;">電圧波形
                     (V)</h4>
                 <span id="close-voltage-graph-btn"
-                    style="cursor:pointer; font-size:20px; font-weight:bold; color:var(--text-primary); width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background-color: rgba(0,0,0,0.1); border-radius: 50%; line-height:1;">&times;</span>
+                    style="cursor:pointer; font-size:20px; font-weight:bold; color:#333333; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background-color: rgba(0,0,0,0.1); border-radius: 50%; line-height:1;">&times;</span>
             </div>
             <div
-                style="position:relative; width:100%; height:120px; background: var(--graph-inner-bg); border-radius:8px; overflow:hidden; border: 1px solid rgba(250, 176, 5, 0.2);">
-                <canvas id="voltage-graph-canvas" width="320" height="120" style="width:100%; height:100%;"></canvas>
+                style="position:relative; width:100%; height:180px; background: var(--graph-inner-bg); border-radius:8px; overflow:hidden; border: 1px solid rgba(250, 176, 5, 0.2);">
+                <canvas id="voltage-graph-canvas" width="320" height="180" style="width:100%; height:100%;"></canvas>
             </div>
 
             <div style="margin-top:4px; display:flex; align-items:center; gap:10px;">
@@ -632,17 +630,17 @@
         </div>
 
         <!-- 電流グラフパネル -->
-        <div id="current-graph-panel" class="results-panel" style="display:none; top:560px; right:20px; width:350px;">
+        <div id="current-graph-panel" class="results-panel">
             <div id="current-graph-header"
                 style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--glass-border); padding-bottom:5px; margin-bottom:10px; cursor:move;">
                 <h4 id="current-graph-title" style="margin:0; pointer-events:none; font-size: 14px; color:#4dabf7;">電流波形
                     (A)</h4>
                 <span id="close-current-graph-btn"
-                    style="cursor:pointer; font-size:20px; font-weight:bold; color:var(--text-primary); width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background-color: rgba(0,0,0,0.1); border-radius: 50%; line-height:1;">&times;</span>
+                    style="cursor:pointer; font-size:20px; font-weight:bold; color:#333333; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background-color: rgba(0,0,0,0.1); border-radius: 50%; line-height:1;">&times;</span>
             </div>
             <div
-                style="position:relative; width:100%; height:120px; background: var(--graph-inner-bg); border-radius:8px; overflow:hidden; border: 1px solid rgba(77, 171, 247, 0.2);">
-                <canvas id="current-graph-canvas" width="320" height="120" style="width:100%; height:100%;"></canvas>
+                style="position:relative; width:100%; height:180px; background: var(--graph-inner-bg); border-radius:8px; overflow:hidden; border: 1px solid rgba(77, 171, 247, 0.2);">
+                <canvas id="current-graph-canvas" width="320" height="180" style="width:100%; height:100%;"></canvas>
             </div>
 
             <div style="margin-top:4px; display:flex; align-items:center; gap:10px;">

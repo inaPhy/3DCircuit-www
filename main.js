@@ -21,6 +21,13 @@ let graphRangeI = 1.00;
 let showAbsoluteValues = true; // Default to ON as requested
 let showIllustrations = false; // ver2.02: イラスト表示モードのフラグ
 
+// パネルの重なり順管理
+let topZIndex = 2000;
+const bringToFront = (panel) => {
+    topZIndex++;
+    panel.style.zIndex = topZIndex;
+};
+
 // Component Colors for Graphs (Sync with CSS variables --bg-xxx)
 const compColors = {
     battery: '#FF8C8C',    // Coral Pink
@@ -429,16 +436,16 @@ function setupEventListeners() {
         resCheckbox.addEventListener('change', (e) => {
             const panel = document.getElementById('results-panel');
             if (e.target.checked) {
-                panel.style.display = 'block';
+                panel.classList.add('show');
                 updateResultsTable();
             } else {
-                panel.style.display = 'none';
+                panel.classList.remove('show');
                 document.querySelectorAll('.comp-highlight').forEach(el => el.remove());
             }
         });
     }
     document.getElementById('close-results-btn').addEventListener('click', () => {
-        document.getElementById('results-panel').style.display = 'none';
+        document.getElementById('results-panel').classList.remove('show');
         const resCheckbox = document.getElementById('results-toggle-checkbox');
         if (resCheckbox) resCheckbox.checked = false;
         document.querySelectorAll('.comp-highlight').forEach(el => el.remove());
@@ -446,6 +453,7 @@ function setupEventListeners() {
 
     // Modal
     document.getElementById('modal-cancel').onclick = () => paramModal.style.display = 'none';
+    paramModal.onclick = (e) => { if (e.target === paramModal) paramModal.style.display = 'none'; };
     document.getElementById('modal-delete').onclick = () => {
         removeComponent(editingCompId);
         paramModal.style.display = 'none';
@@ -491,20 +499,25 @@ function setupEventListeners() {
 
     // Graph Panel listeners
     document.getElementById('close-voltage-graph-btn').onclick = () => {
-        document.getElementById('voltage-graph-panel').style.display = 'none';
-        if (document.getElementById('current-graph-panel').style.display === 'none') selectedGraphCompIds = [];
+        document.getElementById('voltage-graph-panel').classList.remove('show');
+        if (!document.getElementById('current-graph-panel').classList.contains('show')) selectedGraphCompIds = [];
         updateResultsTable();
     };
     document.getElementById('close-current-graph-btn').onclick = () => {
-        document.getElementById('current-graph-panel').style.display = 'none';
-        if (document.getElementById('voltage-graph-panel').style.display === 'none') selectedGraphCompIds = [];
+        document.getElementById('current-graph-panel').classList.remove('show');
+        if (!document.getElementById('voltage-graph-panel').classList.contains('show')) selectedGraphCompIds = [];
         updateResultsTable();
     };
+
 
     const setupDraggable = (headerId, panelId) => {
         const header = document.getElementById(headerId);
         const panel = document.getElementById(panelId);
         if (!header || !panel) return;
+
+        // パネルをクリックしたら最前面へ
+        panel.addEventListener('pointerdown', () => bringToFront(panel));
+
         let isDragging = false;
         let startX, startY, initX, initY;
         header.addEventListener('pointerdown', (e) => {
@@ -554,9 +567,10 @@ function setupEventListeners() {
     const visibilityList = document.getElementById('toolbar-visibility-list');
 
     if (settingsBtn && settingsPanel && settingsBackdrop) {
+        settingsPanel.addEventListener('pointerdown', () => bringToFront(settingsPanel));
         settingsBtn.onclick = (e) => {
             e.stopPropagation();
-            const isHidden = settingsPanel.style.display === 'none';
+            const isHidden = !settingsPanel.classList.contains('show');
             if (isHidden) {
                 visibilityList.innerHTML = '';
                 const items = document.querySelectorAll('.tool-item[data-type]');
@@ -604,12 +618,12 @@ function setupEventListeners() {
                     visibilityList.appendChild(row);
                 });
             }
-            settingsPanel.style.display = isHidden ? 'block' : 'none';
+            settingsPanel.classList.toggle('show', isHidden);
             settingsBackdrop.style.display = isHidden ? 'block' : 'none';
         };
 
         const closePanel = () => {
-            settingsPanel.style.display = 'none';
+            settingsPanel.classList.remove('show');
             settingsBackdrop.style.display = 'none';
         };
 
@@ -835,8 +849,8 @@ function updateResultsTable() {
             }
             
             const hasSelection = selectedGraphCompIds.length > 0;
-            document.getElementById('voltage-graph-panel').style.display = hasSelection ? 'block' : 'none';
-            document.getElementById('current-graph-panel').style.display = hasSelection ? 'block' : 'none';
+            document.getElementById('voltage-graph-panel').classList.toggle('show', hasSelection);
+            document.getElementById('current-graph-panel').classList.toggle('show', hasSelection);
             
             updateResultsTable();
             updateDynamicUI(0); // Refresh graph display
@@ -898,7 +912,7 @@ function toggleSimulation() {
             
             // Show results panel based on setting
             const resCheckbox = document.getElementById('results-toggle-checkbox');
-            document.getElementById('results-panel').style.display = (resCheckbox && resCheckbox.checked) ? 'block' : 'none';
+            document.getElementById('results-panel').classList.toggle('show', !!(resCheckbox && resCheckbox.checked));
             updateResultsTable();
             
             const show3dCheckbox = document.getElementById('show-3d-checkbox');
@@ -922,11 +936,11 @@ function toggleSimulation() {
         simulator3D.hide();
         simulationResults = null;
         if (messageArea) messageArea.innerText = '';
-        document.getElementById('results-panel').style.display = 'none';
+        document.getElementById('results-panel').classList.remove('show');
         
         // グラフも閉じる
-        document.getElementById('voltage-graph-panel').style.display = 'none';
-        document.getElementById('current-graph-panel').style.display = 'none';
+        document.getElementById('voltage-graph-panel').classList.remove('show');
+        document.getElementById('current-graph-panel').classList.remove('show');
         selectedGraphCompIds = [];
         globalGraphHistory = [];
         
@@ -1168,7 +1182,12 @@ function openEdit(id) {
         document.getElementById('modal-title').innerText = `${getLabel(comp.type)} の設定`;
         
         // すべての入力グループを一旦非表示にリセット
-        const groups = ['input-group-number', 'input-group-switch', 'input-group-extra', 'bulb-presets-container', 'meter-range-container', 'meter-details-content', 'bulb-details-content'];
+        const groups = [
+            'input-group-number', 'input-group-switch', 'input-group-extra', 
+            'bulb-presets-container', 'meter-range-container', 'meter-details-content', 
+            'bulb-details-content', 'modal-ac-toggle', 'modal-bulb-details-toggle', 
+            'modal-meter-details-toggle'
+        ];
         const extraPanel = document.getElementById('input-group-extra');
         groups.forEach(gid => {
             const el = document.getElementById(gid);
@@ -1659,7 +1678,7 @@ function updateDynamicUI(currentDt) {
         }
     });
     // Update Results Table
-    if (document.getElementById('results-panel').style.display === 'block') {
+    if (document.getElementById('results-panel').classList.contains('show')) {
         updateResultsTable();
     }
 
@@ -1822,16 +1841,32 @@ function drawGraph(canvasId, prop, maxVal) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    
+    // 高解像度（Retina）対応
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    
+    // 表示サイズに合わせて描画バッファを調整
+    if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+    }
+    
     const w = canvas.width;
     const h = canvas.height;
 
-    ctx.clearRect(0, 0, w, h);
-    ctx.setLineDash([]); // Reset dash for grid lines
+    ctx.save(); // 状態を保存
+    ctx.scale(dpr, dpr);
+    const sw = rect.width;
+    const sh = rect.height;
+
+    ctx.clearRect(0, 0, sw, sh);
+    ctx.setLineDash([]); 
 
     // Grid lines & Labels
     const isDark = appConfig.darkMode;
     ctx.lineWidth = 1;
-    ctx.font = '12px Roboto Mono, monospace';
+    ctx.font = '500 10px "Roboto Mono", monospace'; // 少し小さめでウェイトを上げる
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     
@@ -1840,17 +1875,26 @@ function drawGraph(canvasId, prop, maxVal) {
     const vals = [maxVal, maxVal * 0.5, 0, -maxVal * 0.5, -maxVal];
 
     lines.forEach((ratio, i) => {
-        const y = h * ratio;
+        const y = sh * ratio;
+        
+        // グリッド線
         ctx.strokeStyle = (ratio === 0.5) ? 
-            (isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.2)') : 
-            (isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.05)');
+            (isDark ? 'rgba(255,255,255,0.3)' : 'rgba(0,0,0,0.15)') : 
+            (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.03)');
         ctx.beginPath();
-        ctx.moveTo(0, y); ctx.lineTo(w, y);
+        ctx.moveTo(0, y); ctx.lineTo(sw, y);
         ctx.stroke();
 
-        ctx.fillStyle = isDark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.6)';
+        // ラベル（数値）
         const label = vals[i].toFixed(prop === 'v' ? 1 : 2) + unit;
-        ctx.fillText(label, 5, y - 8);
+        
+        // 数値の視認性を上げるための微細な背景
+        const labelWidth = ctx.measureText(label).width;
+        ctx.fillStyle = isDark ? 'rgba(30, 30, 30, 0.5)' : 'rgba(255, 255, 255, 0.6)';
+        ctx.fillRect(2, y - 10, labelWidth + 4, 12);
+        
+        ctx.fillStyle = isDark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.7)';
+        ctx.fillText(label, 4, y - 4);
     });
 
     // Draw all traces
@@ -1863,39 +1907,40 @@ function drawGraph(canvasId, prop, maxVal) {
         ctx.beginPath();
         const color = compColors[comp.type] || '#888';
         ctx.strokeStyle = color;
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2.5; // 少し細くしてシャープに
         ctx.lineJoin = 'round';
+        ctx.lineCap = 'round';
         
-        // Line style for same-type duplicates
+        // 点線の設定などは維持
         let sameTypeCount = 0;
         for (let i = 0; i < traceIdx; i++) {
             const prevComp = components.find(c => c.id === selectedGraphCompIds[i]);
             if (prevComp && prevComp.type === comp.type) sameTypeCount++;
         }
         
-        if (sameTypeCount === 1) ctx.setLineDash([8, 4]);           // Dashed
-        else if (sameTypeCount === 2) ctx.setLineDash([2, 3]);      // Dotted
-        else if (sameTypeCount >= 3) ctx.setLineDash([12, 3, 3, 3]); // Dash-dot
-        else ctx.setLineDash([]);                                  // Solid
+        if (sameTypeCount === 1) ctx.setLineDash([8, 4]);
+        else if (sameTypeCount === 2) ctx.setLineDash([2, 3]);
+        else if (sameTypeCount >= 3) ctx.setLineDash([12, 3, 3, 3]);
+        else ctx.setLineDash([]);
         
         const dataKey = (prop === 'v') ? 'voltages' : 'currents';
         
         for (let idx = 0; idx < globalGraphHistory.length; idx++) {
-            const x = (idx / (maxGraphHistory - 1)) * w;
+            const x = (idx / (maxGraphHistory - 1)) * sw;
             let val = globalGraphHistory[idx][dataKey][compId];
             if (val === undefined) continue;
 
-            // Apply absolute value if toggle is on for passive components
             if (showAbsoluteValues && (comp.type === 'resistor' || comp.type === 'bulb' || comp.type === 'capacitor' || comp.type === 'inductor')) {
                 val = Math.abs(val);
             }
 
-            const y = h/2 - (val / maxVal) * (h * 0.4); 
+            const y = sh/2 - (val / maxVal) * (sh * 0.4); 
             if (idx === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
         }
         ctx.stroke();
     });
+    ctx.restore(); // 状態を復元
 }
 
 function renderParticles() {
@@ -2975,6 +3020,7 @@ function runSimulation(fullReset = false) {
 }
 
 function showTooltip(e, comp) {
+    if (isSimulating) return;
     if (!simulationResults) return;
     
     tooltip.style.display = 'block';
@@ -3026,6 +3072,7 @@ let isDraggingResults = false;
 let dragStartX, dragStartY, initialPanelX, initialPanelY;
 
 if (resultsHeader && resultsPanel) {
+    resultsPanel.addEventListener('pointerdown', () => bringToFront(resultsPanel));
     resultsHeader.addEventListener('pointerdown', (e) => {
         if (e.target.id === 'close-results-btn') return;
         isDraggingResults = true;

@@ -397,7 +397,7 @@ body {
     top: 0; left: 0;
     width: 100%; height: 100%;
     background: rgba(0, 0, 0, 0.7);
-    z-index: 1000;
+    z-index: 5000;
     align-items: center;
     justify-content: center;
 }
@@ -428,12 +428,38 @@ body {
 #modal-cancel { background: #30363d; color: white; }
 #modal-save { background: var(--accent-color); color: white; }
 
-#comp-value, #comp-freq, #comp-phase, #comp-rint {
+#comp-value, #comp-freq, #comp-phase, #comp-rint, #meter-rint {
     font-size: 24px;
     font-weight: bold;
     padding: 8px;
     width: 160px;
     text-align: right;
+    background: #ffffff !important;
+    color: #333333 !important;
+    border: 1px solid #ced4da !important;
+    border-radius: 8px;
+}
+
+#comp-value {
+    font-size: 32px;
+    width: 220px;
+}
+
+.modal label {
+    color: #555555 !important;
+    font-weight: 500;
+}
+
+.modal span {
+    color: #333333 !important;
+}
+
+.modal select {
+    background: #ffffff !important;
+    color: #333333 !important;
+    border: 1px solid #ced4da !important;
+    padding: 8px;
+    border-radius: 6px;
 }
 
 /* ツールチップ */
@@ -491,20 +517,85 @@ input[type=range]::-moz-range-thumb {
 
 /* 解析結果パネル */
 .results-panel {
-    position: absolute;
-    right: 20px;
-    top: 20px;
-    background: var(--panel-bg);
+    position: fixed;
+    bottom: 90px; /* PCではフッターの上 */
+    left: 50%;
+    transform: translateX(-50%) translateY(30px);
+    background: #ffffff;
     backdrop-filter: blur(10px);
-    border: 1px solid var(--glass-border);
-    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
     padding: 15px;
-    color: var(--text-primary);
-    max-height: 500px;
-    width: 350px;
+    color: #333333;
+    max-height: 40vh;
+    width: 90%;
+    max-width: 500px;
     overflow-y: auto;
-    z-index: 100;
+    z-index: 1000; /* 他の要素より確実に前面に */
+    
+    /* スーッと出てくるアニメーション */
+    opacity: 0;
+    visibility: hidden;
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1), 
+                opacity 0.4s ease, 
+                visibility 0.4s;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
 }
+
+@media (max-width: 600px) {
+    .results-panel {
+        bottom: 20px; /* スマホでは画面下端近くから出す（フッターの上に重ねる） */
+        width: 95%;
+        max-height: 50vh;
+        z-index: 2000;
+    }
+}
+
+.results-panel.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* パネル内のテーブルスタイル調整（白背景用） */
+.results-panel table th {
+    color: #e64980; /* ピンク系のアクセント */
+    border-bottom: 2px solid #f1f3f5;
+}
+
+.results-panel table td {
+    border-bottom: 1px solid #f1f3f5;
+}
+
+.results-panel tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* 設定ウィンドウ専用の上書き */
+#toolbar-settings-panel {
+    position: fixed;
+    top: 70px;
+    right: 20px;
+    left: auto;
+    bottom: auto;
+    transform: translateY(-20px);
+    width: 360px;
+    max-height: 80vh;
+    background: #ffffff !important;
+    color: #333333 !important;
+    border: 1px solid #dddddd !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1) !important;
+    z-index: 3500 !important;
+}
+
+#toolbar-settings-panel.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+#toolbar-settings-panel h4 { color: #000000 !important; }
+#toolbar-settings-panel span, #toolbar-settings-panel div { color: #444444 !important; }
 
 .results-panel div:first-child {
     cursor: move;
