@@ -91,49 +91,51 @@ class Simulator {
 
             // 5. 各島に対してアンカー（接地）を設定
             componentsList.forEach(compNodes => {
-                const anchorCandidates = [];
+                const nodeScores = new Map();
+                compNodes.forEach(n => nodeScores.set(n, 0));
 
-                // 候補1: 電池・交流電源のマイナス極
-                const sources = netlist.filter(c => (c.type === 'battery' || c.type === 'ac_source') && (compNodes.includes(c.nodes[0]) || compNodes.includes(c.nodes[1])));
-                sources.forEach(s => {
-                    anchorCandidates.push(s.nodes[1]);
-                });
+                // 島内の電源系素子を抽出
+                const islandSources = netlist.filter(c => 
+                    (c.type === 'battery' || c.type === 'ac_source' || c.type === 'capacitor' || c.type === 'inductor') && 
+                    (compNodes.includes(c.nodes[0]) || compNodes.includes(c.nodes[1]))
+                );
 
-                // 候補2: 充電されたコンデンサ・コイルの低電位側
-                const storage = netlist.filter(c => (c.type === 'capacitor' || c.type === 'inductor') && (compNodes.includes(c.nodes[0]) || compNodes.includes(c.nodes[1])));
-                storage.forEach(s => {
-                    const vprev = this.history.voltages[s.id] || 0;
-                    if (Math.abs(vprev) > 1e-6) {
-                        // vprev = V(nodes[0]) - V(nodes[1])
-                        // vprev > 0 なら nodes[1] が低い。 vprev < 0 なら nodes[0] が低い。
-                        anchorCandidates.push(vprev > 0 ? s.nodes[1] : s.nodes[0]);
+                islandSources.forEach(s => {
+                    let nPos = null, nNeg = null;
+                    if (s.type === 'battery' || s.type === 'ac_source') {
+                        nPos = s.nodes[0]; nNeg = s.nodes[1];
+                    } else {
+                        const vprev = this.history.voltages[s.id] || 0;
+                        if (Math.abs(vprev) > 1e-6) {
+                            nPos = vprev > 0 ? s.nodes[0] : s.nodes[1];
+                            nNeg = vprev > 0 ? s.nodes[1] : s.nodes[0];
+                        }
                     }
+                    if (nPos && nodeScores.has(nPos)) nodeScores.set(nPos, nodeScores.get(nPos) - 1);
+                    if (nNeg && nodeScores.has(nNeg)) nodeScores.set(nNeg, nodeScores.get(nNeg) + 1);
                 });
 
                 let anchorNode = null;
-                if (anchorCandidates.length > 0) {
-                    // 候補の中で最も下（Y最大）にあるものを選ぶ
-                    let maxY = -Infinity, minX = Infinity;
-                    anchorCandidates.forEach(node => {
-                        const parts = node.split('_');
-                        const x = parseInt(parts[1]);
-                        const y = parseInt(parts[2]);
+                let maxScore = -Infinity;
+                let maxY = -Infinity;
+                let minX = Infinity;
+
+                compNodes.forEach(node => {
+                    const score = nodeScores.get(node);
+                    const parts = node.split('_');
+                    const x = parseInt(parts[1]);
+                    const y = parseInt(parts[2]);
+
+                    // スコアが高い（マイナス端子として有力）ものを優先
+                    // スコアが同じなら、より下（Y大）にあるものを優先
+                    if (score > maxScore) {
+                        maxScore = score; maxY = y; minX = x; anchorNode = node;
+                    } else if (score === maxScore) {
                         if (y > maxY || (y === maxY && x < minX)) {
                             maxY = y; minX = x; anchorNode = node;
                         }
-                    });
-                } else {
-                    // 候補がない（電源も電荷もない）場合は、島全体の最下部ノードを選ぶ
-                    let maxY = -Infinity, minX = Infinity;
-                    compNodes.forEach(node => {
-                        const parts = node.split('_');
-                        const x = parseInt(parts[1]);
-                        const y = parseInt(parts[2]);
-                        if (y > maxY || (y === maxY && x < minX)) {
-                            maxY = y; minX = x; anchorNode = node;
-                        }
-                    });
-                }
+                    }
+                });
 
                 if (anchorNode) {
                     const anchorIdx = nodeMap.get(anchorNode) - 1;
