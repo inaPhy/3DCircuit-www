@@ -39,6 +39,7 @@ class Simulator {
                 return { success: false, message: "回路が接続されていません。" };
             }
 
+            // 1. ノードと接続性の特定
             const adj = new Map();
             nodes.forEach(n => adj.set(n, []));
             netlist.forEach(c => {
@@ -46,6 +47,7 @@ class Simulator {
                 adj.get(c.nodes[1]).push(c.nodes[0]);
             });
 
+            // 2. 「島（孤立した回路網）」の特定
             const visited = new Set();
             const componentsList = [];
             nodes.forEach(n => {
@@ -67,60 +69,82 @@ class Simulator {
                 }
             });
 
-            // For each isolated sub-circuit, pick a ground node
-            const groundNodes = new Set();
-            componentsList.forEach(compNodes => {
-                let gNode = compNodes[0];
-                const pSources = netlist.filter(c => (c.type === 'battery' || c.type === 'ac_source') && (compNodes.includes(c.nodes[0]) || compNodes.includes(c.nodes[1])));
-                if (pSources.length > 0) {
-                    gNode = pSources[0].nodes[1]; // Prefer battery negative terminal or AC terminal 2
-                }
-                groundNodes.add(gNode);
-            });
-
+            // 3. ノード番号のマッピング (1から開始)
             const nodeMap = new Map();
-            let varIdx = 1; // 0 is reserved for ground
-            nodes.forEach(n => {
-                if (groundNodes.has(n)) {
-                    nodeMap.set(n, 0);
-                } else {
-                    nodeMap.set(n, varIdx++);
-                }
-            });
-
+            let varIdx = 1;
+            nodes.forEach(n => { nodeMap.set(n, varIdx++); });
             const numVariables = varIdx - 1;
 
-            // 2. Identify voltage sources (for MNA 'B' matrix)
+            // 4. 電圧源の特定
             const vSources = netlist.filter(c => c.type === 'battery');
             const acSources = netlist.filter(c => c.type === 'ac_source');
             const numVSources = vSources.length + acSources.length;
-
-            // Matrix size: numVariables + numVSources
             const size = numVariables + numVSources;
 
-            if (size === 0) {
-                const voltages = {};
-                nodes.forEach(n => voltages[n] = 0);
-                const currents = {};
-                netlist.forEach(c => currents[c.id] = 0);
-                return { success: true, voltages, currents };
-            }
-            
-            // Initialize matrices using math.js
+            // 5. 行列の初期化
             let A = math.zeros(size, size);
             let Z = math.zeros(size, 1);
 
-            // ground node index
-            const gndNode = 0;
+            // GMIN: 行列を正則にするための微小コンダクタンス
+            const GMIN = 1e-12;
+            for (let i = 0; i < numVariables; i++) A.set([i, i], GMIN);
 
-            // 3. Stamping
+            // 5. 各島に対してアンカー（接地）を設定
+            componentsList.forEach(compNodes => {
+                const anchorCandidates = [];
+
+                // 候補1: 電池・交流電源のマイナス極
+                const sources = netlist.filter(c => (c.type === 'battery' || c.type === 'ac_source') && (compNodes.includes(c.nodes[0]) || compNodes.includes(c.nodes[1])));
+                sources.forEach(s => {
+                    anchorCandidates.push(s.nodes[1]);
+                });
+
+                // 候補2: 充電されたコンデンサ・コイルの低電位側
+                const storage = netlist.filter(c => (c.type === 'capacitor' || c.type === 'inductor') && (compNodes.includes(c.nodes[0]) || compNodes.includes(c.nodes[1])));
+                storage.forEach(s => {
+                    const vprev = this.history.voltages[s.id] || 0;
+                    if (Math.abs(vprev) > 1e-6) {
+                        // vprev = V(nodes[0]) - V(nodes[1])
+                        // vprev > 0 なら nodes[1] が低い。 vprev < 0 なら nodes[0] が低い。
+                        anchorCandidates.push(vprev > 0 ? s.nodes[1] : s.nodes[0]);
+                    }
+                });
+
+                let anchorNode = null;
+                if (anchorCandidates.length > 0) {
+                    // 候補の中で最も下（Y最大）にあるものを選ぶ
+                    let maxY = -Infinity, minX = Infinity;
+                    anchorCandidates.forEach(node => {
+                        const parts = node.split('_');
+                        const x = parseInt(parts[1]);
+                        const y = parseInt(parts[2]);
+                        if (y > maxY || (y === maxY && x < minX)) {
+                            maxY = y; minX = x; anchorNode = node;
+                        }
+                    });
+                } else {
+                    // 候補がない（電源も電荷もない）場合は、島全体の最下部ノードを選ぶ
+                    let maxY = -Infinity, minX = Infinity;
+                    compNodes.forEach(node => {
+                        const parts = node.split('_');
+                        const x = parseInt(parts[1]);
+                        const y = parseInt(parts[2]);
+                        if (y > maxY || (y === maxY && x < minX)) {
+                            maxY = y; minX = x; anchorNode = node;
+                        }
+                    });
+                }
+
+                if (anchorNode) {
+                    const anchorIdx = nodeMap.get(anchorNode) - 1;
+                    A.set([anchorIdx, anchorIdx], A.get([anchorIdx, anchorIdx]) + 1.0);
+                }
+            });
+
+            // 4. スタンプ処理
             netlist.forEach((c, cIdx) => {
-                const n1Orig = nodeMap.get(c.nodes[0]);
-                const n2Orig = nodeMap.get(c.nodes[1]);
-                
-                // Adjust for ground (ignore row/col for gndNode)
-                const n1 = n1Orig === gndNode ? -1 : (n1Orig > gndNode ? n1Orig - 1 : n1Orig);
-                const n2 = n2Orig === gndNode ? -1 : (n2Orig > gndNode ? n2Orig - 1 : n2Orig);
+                const n1 = nodeMap.get(c.nodes[0]) - 1; // 0-based index
+                const n2 = nodeMap.get(c.nodes[1]) - 1; // 0-based index
 
                 if (c.type === 'resistor' || c.type === 'bulb' || c.type === 'voltmeter' || c.type === 'ammeter' || (c.type === 'wire')) {
                     const r = c.type === 'wire' ? 1e-6 : parseFloat(c.value) || 100;
@@ -218,15 +242,10 @@ class Simulator {
             // Use math.lusolve
             const X = math.lusolve(A, Z);
 
-            // 5. Extract results
+            // 6. 結果の抽出
             const voltages = {};
             nodeMap.forEach((idx, id) => {
-                if (idx === gndNode) {
-                    voltages[id] = 0;
-                } else {
-                    const realIdx = idx > gndNode ? idx - 1 : idx;
-                    voltages[id] = X.get([realIdx, 0]);
-                }
+                voltages[id] = X.get([idx - 1, 0]);
             });
 
             const currents = {};
@@ -261,6 +280,7 @@ class Simulator {
                         currents[c.id] = (v1 - v2) * 1e6;
                     }
                     this.history.currents[c.id] = currents[c.id];
+                    this.history.voltages[c.id] = v1 - v2; // コイルの電圧履歴を保存
                 }
             });
 

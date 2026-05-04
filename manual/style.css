@@ -63,6 +63,12 @@ h2 {
     margin-bottom: 30px;
 }
 
+.step-box p, 
+.step-box ul {
+    padding-left: 38px;
+    margin: 10px 0;
+}
+
 .step-num {
     background: var(--primary-color);
     color: white;

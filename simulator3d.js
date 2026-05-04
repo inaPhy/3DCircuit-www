@@ -216,17 +216,19 @@ class Simulator3D {
         // 動的接続性スキャン（バッテリーから繋がるアクティブなノードを特定）
         const activeNodes = new Set();
         this.circuitComponents.forEach(comp => {
-            if (comp.type === 'battery' || comp.type === 'ac_source') {
+            if (comp.type === 'battery' || comp.type === 'ac_source' || comp.type === 'capacitor' || comp.type === 'inductor') {
                 const isHoriz = (comp.rotation === 0 || comp.rotation === 2);
                 const n1 = isHoriz ? `v_${comp.x}_${comp.y}` : `h_${comp.x}_${comp.y}`;
                 const n2 = isHoriz ? `v_${comp.x+1}_${comp.y}` : `h_${comp.x}_${comp.y+1}`;
                 const v1 = simulationResults.voltages[n1];
                 const v2 = simulationResults.voltages[n2];
-                // 実質的に機能している（MNAで電位差が解かれている）電源をアクティブの起点とする。
-                // 交流電源は0Vを跨ぐため、しきい値は十分に小さく設定する。
-                if (v1 !== undefined && v2 !== undefined && (Math.abs(v1 - v2) > 1e-6 || comp.type === 'ac_source')) {
-                    activeNodes.add(n1);
-                    activeNodes.add(n2);
+                // 実質的に機能している（MNAで電位差が解かれている）電源や蓄電素子をアクティブの起点とする。
+                if (v1 !== undefined && v2 !== undefined) {
+                    const diff = Math.abs(v1 - v2);
+                    if (diff > 1e-6 || comp.type === 'ac_source' || comp.type === 'capacitor' || comp.type === 'inductor') {
+                        activeNodes.add(n1);
+                        activeNodes.add(n2);
+                    }
                 }
             }
         });
@@ -258,10 +260,10 @@ class Simulator3D {
             });
         }
 
-        // activeNodesに含まれる電圧のみを使ってminVを決定する（ノイズとしての0Vを排除）
-        // 常に0Vを基準（地面）とする。AC回路などで負の電位がある場合は地面の下に描画されるが、
-        // そうしないと0V地点（未接続素子など）がACの変動に合わせて跳ね上がってしまう。
-        let minV = 0;
+        // 常に 0V を地面（高さ0）の基準とする。
+        // これにより、各島がそれぞれの 0V ノードで地面に接地し、互いに干渉しなくなる。
+        this.minV = 0;
+        const minV = this.minV;
 
         this.circuitComponents.forEach(comp => {
             const leftNode = `v_${comp.x}_${comp.y}`;
@@ -270,9 +272,9 @@ class Simulator3D {
             const bottomNode = `h_${comp.x}_${comp.y + 1}`;
 
             const getV = (node) => {
-                const v = simulationResults.voltages[node];
-                if (!activeNodes.has(node)) return minV; // バッテリーに繋がっていない孤立ノードはMNA上の0Vを無視して地面(minV)に落とす
-                return v !== undefined ? v : minV; 
+                let v = simulationResults.voltages[node];
+                if (!activeNodes.has(node) || v === undefined || isNaN(v) || !isFinite(v)) return minV;
+                return v; 
             };
 
             const vL = getV(leftNode);
@@ -293,7 +295,22 @@ class Simulator3D {
             let vStart = minV, vEnd = minV;
 
             if (['wire_l', 'wire_t'].includes(comp.type)) {
-                vStart = eqV; vEnd = eqV;
+                isHorizontal = (comp.rotation === 0 || comp.rotation === 2);
+                if (comp.type === 'wire_l') {
+                    // L字の2端子を特定
+                    let n1, n2;
+                    if (comp.rotation === 0) { n1 = topNode; n2 = rightNode; }
+                    else if (comp.rotation === 1) { n1 = rightNode; n2 = bottomNode; }
+                    else if (comp.rotation === 2) { n1 = bottomNode; n2 = leftNode; }
+                    else { n1 = leftNode; n2 = topNode; }
+                    vStart = getV(n1); vEnd = getV(n2);
+                } else {
+                    // T字は分岐点があるが、簡易的に代表値を使用するか、より詳細に分岐を描画する。
+                    // ここでは一旦、全体の平均的な傾斜を表示するため、接続されているノードの最大・最小をとる
+                    const activeVs = definedVolts.length > 0 ? definedVolts : [minV];
+                    vStart = Math.min(...activeVs);
+                    vEnd = Math.max(...activeVs);
+                }
             } else if (comp.rotation === 0 || comp.rotation === 2 || (comp.type === 'wire' && (comp.rotation===0||comp.rotation===2))) {
                 isHorizontal = true;
                 vStart = vL; vEnd = vR;
@@ -480,8 +497,8 @@ class Simulator3D {
         const key = comp.type + "_" + comp.rotation + "_" + stateKey + "_" + themeKey + "_" + illKey + valKey + (isHighlighted ? "_hl" : "");
         if (this.textureParams[key]) return this.textureParams[key];
 
-        // 導線などの基本色を定義 (未定義エラー回避)
-        const color = isDarkMode ? "#ffffff" : "#000000";
+        // ダークモード時も導線は黒に設定 (ユーザー要望)
+        const color = "#000000";
 
         const canvas = document.createElement('canvas');
         canvas.width = 128;
@@ -502,7 +519,7 @@ class Simulator3D {
         ctx.fillRect(0, 0, 128, 128);
 
         ctx.strokeStyle = color;
-        ctx.lineWidth = 6;
+        ctx.lineWidth = 3;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
 
@@ -527,7 +544,7 @@ class Simulator3D {
                 // 導線を最初に描画
                 ctx.beginPath();
                 ctx.strokeStyle = color;
-                ctx.lineWidth = 6;
+                ctx.lineWidth = 3;
                 ctx.moveTo(-64, 0); ctx.lineTo(64, 0);
                 ctx.stroke();
 
@@ -562,12 +579,15 @@ class Simulator3D {
                 ctx.fillStyle = 'rgba(255,255,255,0.1)';
                 ctx.fillRect(-40, -15, 80, 6);
             } else {
+                ctx.lineWidth = 3;
                 ctx.moveTo(-64, 0); ctx.lineTo(-30, 0);
                 ctx.moveTo(30, 0); ctx.lineTo(64, 0);
                 ctx.stroke(); ctx.beginPath();
                 ctx.fillStyle = '#ffffff';
                 ctx.fillRect(-30, -15, 60, 30);
+                ctx.lineWidth = 4; // 抵抗の枠線は4
                 ctx.strokeRect(-30, -15, 60, 30);
+                ctx.lineWidth = 3; // 元に戻す
             }
         } else if (comp.type === 'battery') {
             if (typeof showIllustrations !== 'undefined' && showIllustrations) {
@@ -576,7 +596,7 @@ class Simulator3D {
                 // 導線を最初に描画 (重なりの一番下、左右均等化)
                 ctx.beginPath();
                 ctx.strokeStyle = color;
-                ctx.lineWidth = 6;
+                ctx.lineWidth = 3;
                 ctx.moveTo(-64, 0); ctx.lineTo(-50.5, 0);
                 ctx.moveTo(50.5, 0); ctx.lineTo(64, 0);
                 ctx.stroke(); ctx.beginPath();
@@ -628,7 +648,7 @@ class Simulator3D {
                 ctx.fill();
             } else {
                 // シンボル描画 (ver2.0確定デザインの完全復元)
-                ctx.lineWidth = 6;
+                ctx.lineWidth = 3;
                 ctx.moveTo(-64, 0); ctx.lineTo(-15, 0);
                 ctx.moveTo(15, 0); ctx.lineTo(64, 0);
                 ctx.stroke(); ctx.beginPath();
@@ -637,35 +657,129 @@ class Simulator3D {
                 ctx.moveTo(-15, -30); ctx.lineTo(-15, 30); // 長い極板
                 ctx.moveTo(15, -16); ctx.lineTo(15, 16);   // 短い極板
                 ctx.stroke(); ctx.beginPath();
-                ctx.lineWidth = 6;
+                ctx.lineWidth = 3;
             }
         } else if (comp.type === 'ac_source') {
-            ctx.moveTo(-64, 0); ctx.lineTo(-36, 0);
-            ctx.moveTo(36, 0); ctx.lineTo(64, 0);
-            ctx.stroke(); ctx.beginPath();
-            
-            ctx.fillStyle = '#ffffff';
-            ctx.lineWidth = 8; // わずかに細く (10 から 8 へ)
-            ctx.arc(0, 0, 36, 0, Math.PI*2);
-            ctx.fill();
-            ctx.stroke(); ctx.beginPath();
+            if (typeof showIllustrations !== 'undefined' && showIllustrations) {
+                // イラスト描画 (3D用テクスチャ: 交流電源装置)
+                
+                // 1. 筐体 (ダークグレーのメタリック調)
+                const gradBody = ctx.createLinearGradient(0, -40, 0, 40);
+                gradBody.addColorStop(0, '#4a5568');
+                gradBody.addColorStop(0.5, '#2d3748');
+                gradBody.addColorStop(1, '#1a202c');
+                ctx.fillStyle = gradBody;
+                ctx.beginPath();
+                ctx.roundRect(-48, -36, 96, 72, 6);
+                ctx.fill();
+                // 枠線を排除
 
-            ctx.lineWidth = 6; // 波は元の太さに戻す
-            // サイン波を平坦化 (20 -> 12)
-            ctx.moveTo(-20, 0);
-            ctx.bezierCurveTo(-20, -12, -10, -12, 0, 0);
-            ctx.bezierCurveTo(10, 12, 20, 12, 20, 0);
-            ctx.stroke(); ctx.beginPath();
+                // 2. 液晶ディスプレイ
+                ctx.fillStyle = '#0f172a';
+                ctx.beginPath();
+                ctx.roundRect(-36, -24, 72, 32, 2);
+                ctx.fill();
+                ctx.strokeStyle = '#334155';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // 3. サイン波 (発光風)
+                ctx.strokeStyle = '#38bdf8';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(-28, -8);
+                ctx.bezierCurveTo(-28, -20, -14, -20, -14, -8);
+                ctx.bezierCurveTo(-14, 4, 0, 4, 0, -8);
+                ctx.bezierCurveTo(0, -20, 14, -20, 14, -8);
+                ctx.bezierCurveTo(14, 4, 28, 4, 28, -8);
+                ctx.stroke();
+
+                // 4. 操作ノブ (2個)
+                [-20, 20].forEach(kx => {
+                    ctx.fillStyle = '#94a3b8';
+                    ctx.beginPath();
+                    ctx.arc(kx, 20, 8, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#475569';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    
+                    // 指標線
+                    ctx.strokeStyle = '#1e293b';
+                    ctx.beginPath();
+                    ctx.moveTo(kx, 20);
+                    ctx.lineTo(kx + 4, 20 - 4);
+                    ctx.stroke();
+                });
+
+                // 6. 導線 (リード線)
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(-64, 0); ctx.lineTo(-48, 0);
+                ctx.moveTo(48, 0); ctx.lineTo(64, 0);
+                ctx.stroke(); ctx.beginPath();
+            } else {
+                ctx.lineWidth = 3;
+                ctx.moveTo(-64, 0); ctx.lineTo(-36, 0);
+                ctx.moveTo(36, 0); ctx.lineTo(64, 0);
+                ctx.stroke(); ctx.beginPath();
+                ctx.fillStyle = '#ffffff';
+                ctx.arc(0, 0, 36, 0, Math.PI*2);
+                ctx.fill();
+                ctx.lineWidth = 6; // 交流電源は太め(6)
+                ctx.stroke(); ctx.beginPath();
+                ctx.lineWidth = 4; // 中のサイン波は4
+                ctx.moveTo(-20, 0);
+                ctx.bezierCurveTo(-20, -12, -10, -12, 0, 0);
+                ctx.bezierCurveTo(10, 12, 20, 12, 20, 0);
+                ctx.stroke(); ctx.beginPath();
+                ctx.lineWidth = 3; // 元に戻す
+            }
         } else if (comp.type === 'capacitor') {
-            ctx.moveTo(-64, 0); ctx.lineTo(-15, 0);
-            ctx.moveTo(15, 0); ctx.lineTo(64, 0);
-            ctx.stroke(); ctx.beginPath();
-            
-            ctx.lineWidth = 9; // 9pxに微調整
-            ctx.moveTo(-15, -30); ctx.lineTo(-15, 30);
-            ctx.moveTo(15, -30); ctx.lineTo(15, 30);
-            ctx.stroke(); ctx.beginPath();
-            ctx.lineWidth = 6; // 元に戻す
+            if (typeof showIllustrations !== 'undefined' && showIllustrations) {
+                // 1. 極板1 (左) のグラデーション: 2Dと完全に一致
+                const gradPlate1 = ctx.createLinearGradient(-22, 0, -10, 0);
+                gradPlate1.addColorStop(0, '#ced4da');
+                gradPlate1.addColorStop(0.5, '#e2e8f0');
+                gradPlate1.addColorStop(1, '#adb5bd');
+                
+                // 2. 極板2 (右) のグラデーション: 2Dと完全に一致
+                const gradPlate2 = ctx.createLinearGradient(10, 0, 22, 0);
+                gradPlate2.addColorStop(0, '#ced4da');
+                gradPlate2.addColorStop(0.5, '#e2e8f0');
+                gradPlate2.addColorStop(1, '#adb5bd');
+                
+                ctx.strokeStyle = '#cbd5e1';
+                ctx.lineWidth = 1;
+                
+                // Plate 1 描画
+                ctx.fillStyle = gradPlate1;
+                ctx.fillRect(-22, -40, 12, 80);
+                ctx.strokeRect(-22, -40, 12, 80);
+                
+                // Plate 2 描画
+                ctx.fillStyle = gradPlate2;
+                ctx.fillRect(10, -40, 12, 80);
+                ctx.strokeRect(10, -40, 12, 80);
+                
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 3;
+                ctx.moveTo(-64, 0); ctx.lineTo(-22, 0);
+                ctx.moveTo(22, 0); ctx.lineTo(64, 0);
+                ctx.stroke();
+            } else {
+                ctx.moveTo(-64, 0); ctx.lineTo(-15, 0);
+                ctx.moveTo(15, 0); ctx.lineTo(64, 0);
+                ctx.stroke(); ctx.beginPath();
+                
+                ctx.lineWidth = 9;
+                ctx.moveTo(-15, -30); ctx.lineTo(-15, 30);
+                ctx.moveTo(15, -30); ctx.lineTo(15, 30);
+                ctx.stroke(); ctx.beginPath();
+                ctx.lineWidth = 3;
+            }
         } else if (comp.type === 'switch') {
             ctx.moveTo(-64, 0); ctx.lineTo(-15, 0);
             ctx.moveTo(15, 0); ctx.lineTo(64, 0);
@@ -686,7 +800,7 @@ class Simulator3D {
                 ctx.save();
                 ctx.beginPath();
                 ctx.strokeStyle = color;
-                ctx.lineWidth = 6;
+                ctx.lineWidth = 3;
                 ctx.moveTo(-64, 0); ctx.lineTo(-40, 0); ctx.lineTo(-40, 39); ctx.lineTo(-8, 39);
                 ctx.moveTo(64, 0); ctx.lineTo(40, 0); ctx.lineTo(40, 19); ctx.lineTo(15, 19);
                 ctx.stroke();
@@ -723,44 +837,124 @@ class Simulator3D {
                 ctx.fillStyle = gradGlass;
                 ctx.strokeStyle = 'rgba(0,0,0,0)';
                 ctx.lineWidth = 0;
-                ctx.globalAlpha = 0.6; // 常に少し透明
+                ctx.globalAlpha = 0.6;
                 ctx.arc(0, -20, 30, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.restore();
 
-                // フィラメント (明るさに応じて白くなる)
+                // フィラメント
                 ctx.save();
                 ctx.beginPath();
                 const r_f = Math.round(52 + (255 - 52) * intensity);
                 const g_f = Math.round(58 + (255 - 58) * intensity);
                 const b_f = Math.round(64 + (255 - 64) * intensity);
                 ctx.strokeStyle = `rgb(${r_f},${g_f},${b_f})`;
-                ctx.lineWidth = 4;
+                ctx.lineWidth = 3;
                 ctx.moveTo(-10, -12);
                 ctx.bezierCurveTo(-10, -26, 10, -26, 10, -12);
                 ctx.stroke();
                 ctx.restore();
-
-                // 3D用の発光感 (オーバーレイ) - 外部メッシュ方式に移行したため削除
-                ctx.beginPath(); // パスをリセット
+                ctx.beginPath();
             } else {
+                ctx.lineWidth = 3;
                 ctx.moveTo(-64, 0); ctx.lineTo(-28, 0);
                 ctx.moveTo(28, 0); ctx.lineTo(64, 0);
                 ctx.stroke(); ctx.beginPath();
                 ctx.fillStyle = '#ffffff';
                 ctx.arc(0, 0, 28, 0, Math.PI*2);
-                ctx.fill(); ctx.stroke(); ctx.beginPath();
+                ctx.fill(); 
+                ctx.lineWidth = 4; // 電球は少し控えめ(4)
+                ctx.stroke(); ctx.beginPath();
+                ctx.lineWidth = 3; // 元に戻す
                 ctx.moveTo(-18, -18); ctx.lineTo(18, 18);
                 ctx.moveTo(-18, 18); ctx.lineTo(18, -18);
+                ctx.stroke(); ctx.beginPath();
             }
         } else if (comp.type === 'inductor') {
-            ctx.moveTo(-64, 0); ctx.lineTo(-30, 0);
-            // 4つの山を等間隔で描画 (幅60を15ずつに分割し半径7.5)
-            ctx.arc(-22.5, 0, 7.5, Math.PI, 0);
-            ctx.arc(-7.5,  0, 7.5, Math.PI, 0);
-            ctx.arc(7.5,   0, 7.5, Math.PI, 0);
-            ctx.arc(22.5,  0, 7.5, Math.PI, 0);
-            ctx.moveTo(30, 0); ctx.lineTo(64, 0);
+            if (typeof showIllustrations !== 'undefined' && showIllustrations) {
+                // イラスト描画 (3D用テクスチャ: 芯材付きコイル)
+                
+                // 1. グラデーション定義
+                const gradCore = ctx.createLinearGradient(0, -15, 0, 15);
+                gradCore.addColorStop(0, '#94a3b8');
+                gradCore.addColorStop(0.3, '#f1f5f9');
+                gradCore.addColorStop(0.5, '#ffffff');
+                gradCore.addColorStop(0.7, '#e2e8f0');
+                gradCore.addColorStop(1, '#64748b');
+                
+                const gradWire = ctx.createLinearGradient(0, -15, 0, 15);
+                gradWire.addColorStop(0, '#78350f');
+                gradWire.addColorStop(1, '#451a03');
+                
+                const step = 10; // ステップを短く調整
+                const coreH = 28;
+                const loopCount = 6;
+                const coreW = step * (loopCount - 1);
+                const startX = -coreW / 2;
+
+                // 2. 背面の巻き線
+                ctx.strokeStyle = '#451a03';
+                ctx.lineWidth = 3;
+                for (let i = 0; i < loopCount; i++) {
+                    const x = startX + i * step;
+                    ctx.beginPath();
+                    ctx.moveTo(x, -coreH/2); ctx.lineTo(x, coreH/2);
+                    ctx.stroke();
+                }
+
+                // 3. 芯材 (コア)
+                ctx.fillStyle = gradCore;
+                ctx.beginPath();
+                ctx.roundRect(startX - step/2 - 4, -coreH/2, coreW + step + 8, coreH, 6);
+                ctx.fill();
+                // 枠線を排除
+
+                // 4. 前面の巻き線 (上下反転: 右斜め下への傾斜)
+                ctx.strokeStyle = gradWire;
+                ctx.lineWidth = 4;
+                ctx.lineCap = 'round';
+                
+                // 左端開始線
+                ctx.beginPath();
+                ctx.moveTo(startX - step/2, 0);
+                ctx.lineTo(startX, coreH/2);
+                ctx.stroke();
+
+                for (let i = 0; i < loopCount; i++) {
+                    const x = startX + i * step;
+                    if (i < loopCount - 1) {
+                        ctx.beginPath();
+                        ctx.moveTo(x, -coreH/2); ctx.lineTo(x + step, coreH/2);
+                        ctx.stroke();
+                    } else {
+                        // 右端終了線
+                        ctx.beginPath();
+                        ctx.moveTo(x, -coreH/2); ctx.lineTo(x + step/2, 0);
+                        ctx.stroke();
+                    }
+                }
+
+                // 5. 導線 (リード線)
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(-64, 0); ctx.lineTo(startX - step/2, 0);
+                ctx.moveTo(startX + (loopCount-1)*step + step/2, 0); ctx.lineTo(64, 0);
+                ctx.stroke();
+            } else {
+                ctx.lineWidth = 3;
+                ctx.moveTo(-64, 0); ctx.lineTo(-30, 0);
+                ctx.stroke(); ctx.beginPath();
+                ctx.lineWidth = 4; // コイル部分は4
+                ctx.arc(-22.5, 0, 7.5, Math.PI, 0);
+                ctx.arc(-7.5,  0, 7.5, Math.PI, 0);
+                ctx.arc(7.5,   0, 7.5, Math.PI, 0);
+                ctx.arc(22.5,  0, 7.5, Math.PI, 0);
+                ctx.stroke(); ctx.beginPath();
+                ctx.lineWidth = 3; // 元に戻す
+                ctx.moveTo(30, 0); ctx.lineTo(64, 0);
+                ctx.stroke();
+            }
         } else if (comp.type === 'voltmeter' || comp.type === 'ammeter') {
             if (typeof showIllustrations !== 'undefined' && showIllustrations) {
                 const isV = comp.type === 'voltmeter';
@@ -774,7 +968,7 @@ class Simulator3D {
                 // 導線
                 ctx.beginPath();
                 ctx.strokeStyle = color;
-                ctx.lineWidth = 6;
+                ctx.lineWidth = 3;
                 ctx.moveTo(-64, 0); ctx.lineTo(-36, 0);
                 ctx.moveTo(36, 0); ctx.lineTo(64, 0);
                 ctx.stroke();
@@ -830,12 +1024,16 @@ class Simulator3D {
                 ctx.beginPath(); // 後続の stroke() が端子に適用されないようにパスをクリア
             } else {
                 const t = comp.type === 'voltmeter' ? 'V' : 'A';
+                ctx.lineWidth = 3;
                 ctx.moveTo(-64, 0); ctx.lineTo(-28, 0);
                 ctx.moveTo(28, 0); ctx.lineTo(64, 0);
                 ctx.stroke(); ctx.beginPath();
                 ctx.fillStyle = '#ffffff';
                 ctx.arc(0, 0, 28, 0, Math.PI*2);
-                ctx.fill(); ctx.stroke(); ctx.beginPath();
+                ctx.fill(); 
+                ctx.lineWidth = 5; // 円を少し太く(6から5に微調整)
+                ctx.stroke(); ctx.beginPath();
+                ctx.lineWidth = 3; // 元に戻す
                 ctx.fillStyle = '#000'; ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
                 ctx.save();
                 if (comp.rotation) { ctx.rotate(-comp.rotation * Math.PI / 2); }
@@ -903,8 +1101,8 @@ class Simulator3D {
         let count = 0;
         const dummy = new THREE.Object3D();
         
-        // 常に0Vを基準（地面）とする
-        const minV = 0;
+        // クラス共通の最小電位を基準とする（未設定なら0）
+        const minV = this.minV !== undefined ? this.minV : 0;
 
         components.forEach(comp => {
             const cx = (comp.x + 0.5 - this.cx) * this.GRID_SCALE;
@@ -951,8 +1149,14 @@ class Simulator3D {
                     }
                 });
             } else if (comp.type === 'wire_l') {
-                const eqV = getAnyV(); // L字は等電位
-                const z = (eqV - minV) * this.Z_SCALE;
+                let n1, n2;
+                if (comp.rotation === 0) { n1 = topNode; n2 = rightNode; }
+                else if (comp.rotation === 1) { n1 = rightNode; n2 = bottomNode; }
+                else if (comp.rotation === 2) { n1 = bottomNode; n2 = leftNode; }
+                else { n1 = leftNode; n2 = topNode; }
+                const vStart = getV(n1);
+                const vEnd = getV(n2);
+
                 const num = 4;
                 for (let p = 0; p < num; p++) {
                     if (count >= 2000) break;
@@ -969,6 +1173,7 @@ class Simulator3D {
                     else if (comp.rotation === 2) { rx = -rx; ry = -ry; }
                     else if (comp.rotation === 3) { const tx = rx; rx = ry; ry = -tx; }
                     
+                    const z = (vStart + (vEnd - vStart) * prog - minV) * this.Z_SCALE;
                     dummy.position.set(cx + rx * this.GRID_SCALE, cy - ry * this.GRID_SCALE, z + 2);
                     dummy.updateMatrix();
                     this.particleMesh.setMatrixAt(count++, dummy.matrix);
@@ -996,7 +1201,8 @@ class Simulator3D {
                         const rX = -0.025 + rand2 * 0.05;
                         
                         let lx, ly, z;
-                        const v1Offset = (comp.rotation === 0) ? -0.08 : (comp.rotation === 1) ? 0.08 : (comp.rotation === 2) ? 0.08 : -0.08;
+                        const isIll = (typeof showIllustrations !== 'undefined' && showIllustrations);
+                        const v1Offset = (comp.rotation === 0) ? (isIll ? -0.125 : -0.117) : (comp.rotation === 1) ? (isIll ? 0.125 : 0.117) : (comp.rotation === 2) ? (isIll ? 0.125 : 0.117) : (isIll ? -0.125 : -0.117);
                         const v2Offset = -v1Offset;
                         
                         if (comp.rotation === 0 || comp.rotation === 2) {

@@ -1167,10 +1167,14 @@ function openEdit(id) {
         editingCompId = id;
         document.getElementById('modal-title').innerText = `${getLabel(comp.type)} の設定`;
         
-        // Reset extra groups
+        // すべての入力グループを一旦非表示にリセット
+        const groups = ['input-group-number', 'input-group-switch', 'input-group-extra', 'bulb-presets-container', 'meter-range-container', 'meter-details-content', 'bulb-details-content'];
         const extraPanel = document.getElementById('input-group-extra');
-        if (extraPanel) extraPanel.style.display = 'none';
-        
+        groups.forEach(gid => {
+            const el = document.getElementById(gid);
+            if (el) el.style.display = 'none';
+        });
+
         const isMeter = (comp.type === 'voltmeter' || comp.type === 'ammeter');
         const saveBtn = document.getElementById('modal-save');
         const acToggleBtn = document.getElementById('modal-ac-toggle');
@@ -1178,15 +1182,14 @@ function openEdit(id) {
         const meterToggleBtn = document.getElementById('modal-meter-details-toggle');
         
         if (comp.type === 'switch') {
-            document.getElementById('input-group-number').style.display = 'none';
             document.getElementById('input-group-switch').style.display = 'block';
             document.getElementById('comp-switch-val').value = comp.value;
+            if (saveBtn) saveBtn.style.display = 'block';
         } else if (comp.type.startsWith('wire')) {
-            document.getElementById('input-group-number').style.display = 'none';
-            document.getElementById('input-group-switch').style.display = 'none';
+            // 導線の場合は何も表示しない（削除ボタンのみ有効）
+            if (saveBtn) saveBtn.style.display = 'none';
         } else {
             document.getElementById('input-group-number').style.display = 'block';
-            document.getElementById('input-group-switch').style.display = 'none';
             document.getElementById('comp-value').value = comp.value;
             const unit = { battery: 'V', ac_source: 'V', resistor: 'Ω', bulb: 'Ω', capacitor: 'μF', inductor: 'mH', voltmeter: 'Ω', ammeter: 'Ω' }[comp.type] || '';
             const valLabel = { battery: '起電力', ac_source: '振幅(V)', resistor: '抵抗値', bulb: '抵抗値', capacitor: '電気容量', inductor: '自己インダクタンス', voltmeter: '内部抵抗', ammeter: '内部抵抗' }[comp.type] || '値';
@@ -1901,6 +1904,8 @@ function renderParticles() {
     
     if (!simulationResults) return;
 
+    const scale = CELL_SIZE / 60; // 基本サイズ60に対するスケール
+
     const showParticlesCheckbox = document.getElementById('show-particles-checkbox');
     if (showParticlesCheckbox && !showParticlesCheckbox.checked) return;
 
@@ -1992,39 +1997,39 @@ function renderParticles() {
             };
 
             // 1. Draw Stored Static Charges
-            // Significantly increase the number of static particles and scatter them pseudo-randomly to look like a colony
             const numStatic = Math.min(Math.round(Math.abs(plateDiff) * 8), 40);
             if (numStatic > 0) {
                 const isNeg3Positive = plateDiff > 0;
                 let splx = 0, sply = 0;
                 for (let s = 0; s < numStatic; s++) {
-                    // pseudo-random hash ensuring the same particle 's' stays exactly in the same place every frame
                     const hash1 = Math.abs(Math.sin(s * 12.9898 + comp.x * 78.233 + comp.y) * 43758.5453);
                     const hash2 = Math.abs(Math.sin(s * 78.233 + comp.x * 12.9898 + comp.y * 3) * 43758.5453);
                     const rand1 = hash1 - Math.floor(hash1);
                     const rand2 = hash2 - Math.floor(hash2);
                     
-                    const rY = -14 + rand1 * 28;
-                    const rX = -1.5 + rand2 * 3;
+                    // すべての値に scale を適用
+                    const rY = (-17 + rand1 * 34) * scale;
+                    const rX = (-2 + rand2 * 4) * scale;
+                    const plateOffset = (isNeg3Positive ? -5.5 : 5.5) * scale;
                     
                     if (comp.rotation === 0 || comp.rotation === 2) {
-                        splx = (isNeg3Positive ? -5 : 5) + rX;
+                        splx = plateOffset + rX;
                         sply = rY;
                     } else {
-                        sply = (isNeg3Positive ? -5 : 5) + rX;
+                        sply = plateOffset + rX;
                         splx = rY;
                     }
                     drawCapParticle(splx, sply);
                 }
             }
 
-            // 2. Draw Moving Charges (always visible, will stay static if i is 0)
-            const numCapParticles = 2; // Use 2 particles per wire to match visual density
+            // 2. Draw Moving Charges
+            const numCapParticles = 2;
             for (let p = 0; p < numCapParticles; p++) {
                 const progress = (comp.pProgress + p / numCapParticles) % 1;
                 const half = CELL_SIZE / 2;
-                const gap = CELL_SIZE * 0.1; // 6px relative to 60
-                const travel = half - gap;   // 24px relative to 60
+                const gap = 6 * scale; // 60px基準で6px
+                const travel = half - gap;
                 
                 let lx1 = 0, ly1 = 0, lx2 = 0, ly2 = 0;
                 if (comp.rotation === 0) {
@@ -2227,16 +2232,93 @@ function drawComponentVisual(comp) {
             }
             break;
         case 'ac_source':
-            path.setAttribute('d', 'M -30,0 L -18,0 M 18,0 L 30,0');
-            const acCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            acCircle.setAttribute('cx', 0); acCircle.setAttribute('cy', 0); acCircle.setAttribute('r', 18);
-            acCircle.setAttribute('fill', 'var(--inner-fill)'); 
-            acCircle.setAttribute('stroke', color); acCircle.setAttribute('stroke-width', '3');
-            const wave = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            wave.setAttribute('d', 'M -10,0 C -10,-6 -5,-6 0,0 C 5,6 10,6 10,0');
-            wave.setAttribute('stroke', color); wave.setAttribute('stroke-width', '2'); wave.setAttribute('fill', 'none');
-            g.appendChild(acCircle); g.appendChild(wave);
-            g.appendChild(path);
+            if (showIllustrations) {
+                const acId = comp.id || 'ghost';
+                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                
+                // 筐体のグラデーション
+                const gradBody = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                gradBody.setAttribute('id', `grad-ac-body-${acId}`);
+                gradBody.setAttribute('x1', '0%'); gradBody.setAttribute('y1', '0%');
+                gradBody.setAttribute('x2', '0%'); gradBody.setAttribute('y2', '100%');
+                gradBody.innerHTML = `
+                    <stop offset="0%" style="stop-color:#4a5568;stop-opacity:1" />
+                    <stop offset="50%" style="stop-color:#2d3748;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#1a202c;stop-opacity:1" />
+                `;
+                
+                // ディスプレイのグラデーション
+                const gradScreen = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                gradScreen.setAttribute('id', `grad-ac-screen-${acId}`);
+                gradScreen.setAttribute('x1', '0%'); gradScreen.setAttribute('y1', '0%');
+                gradScreen.setAttribute('x2', '0%'); gradScreen.setAttribute('y2', '100%');
+                gradScreen.innerHTML = `
+                    <stop offset="0%" style="stop-color:#0f172a;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#1e293b;stop-opacity:1" />
+                `;
+                
+                defs.appendChild(gradBody);
+                defs.appendChild(gradScreen);
+                g.appendChild(defs);
+
+                // 本体筐体
+                const body = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                body.setAttribute('x', -24); body.setAttribute('y', -18);
+                body.setAttribute('width', 48); body.setAttribute('height', 36);
+                body.setAttribute('rx', 3);
+                body.setAttribute('fill', `url(#grad-ac-body-${acId})`);
+                body.setAttribute('stroke', 'none');
+                g.appendChild(body);
+                
+                // 液晶ディスプレイ
+                const screen = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                screen.setAttribute('x', -18); screen.setAttribute('y', -12);
+                screen.setAttribute('width', 36); screen.setAttribute('height', 16);
+                screen.setAttribute('rx', 1);
+                screen.setAttribute('fill', `url(#grad-ac-screen-${acId})`);
+                screen.setAttribute('stroke', '#334155');
+                g.appendChild(screen);
+                
+                // サイン波 (ディスプレイ内)
+                const screenWave = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                screenWave.setAttribute('d', 'M -14,-4 C -14,-10 -7,-10 -7,-4 C -7,2 0,2 0,-4 C 0,-10 7,-10 7,-4 C 7,2 14,2 14,-4');
+                screenWave.setAttribute('stroke', '#38bdf8'); // 鮮やかなシアン
+                screenWave.setAttribute('stroke-width', '1.5');
+                screenWave.setAttribute('fill', 'none');
+                screenWave.setAttribute('stroke-linecap', 'round');
+                g.appendChild(screenWave);
+                
+                // 操作ノブ (2個)
+                [-10, 10].forEach(kx => {
+                    const knob = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    knob.setAttribute('cx', kx); knob.setAttribute('cy', 10); knob.setAttribute('r', 4);
+                    knob.setAttribute('fill', '#94a3b8');
+                    knob.setAttribute('stroke', '#475569');
+                    knob.setAttribute('stroke-width', '1');
+                    g.appendChild(knob);
+                    
+                    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+                    marker.setAttribute('x1', kx); marker.setAttribute('y1', 10);
+                    marker.setAttribute('x2', kx + 2); marker.setAttribute('y2', 10 - 2);
+                    marker.setAttribute('stroke', '#1e293b');
+                    marker.setAttribute('stroke-width', '1');
+                    g.appendChild(marker);
+                });
+
+                path.setAttribute('d', 'M -30,0 L -24,0 M 24,0 L 30,0');
+                g.appendChild(path);
+            } else {
+                path.setAttribute('d', 'M -30,0 L -18,0 M 18,0 L 30,0');
+                const acCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                acCircle.setAttribute('cx', 0); acCircle.setAttribute('cy', 0); acCircle.setAttribute('r', 18);
+                acCircle.setAttribute('fill', 'var(--inner-fill)'); 
+                acCircle.setAttribute('stroke', color); acCircle.setAttribute('stroke-width', '3');
+                const wave = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                wave.setAttribute('d', 'M -10,0 C -10,-6 -5,-6 0,0 C 5,6 10,6 10,0');
+                wave.setAttribute('stroke', color); wave.setAttribute('stroke-width', '2'); wave.setAttribute('fill', 'none');
+                g.appendChild(acCircle); g.appendChild(wave);
+                g.appendChild(path);
+            }
             break;
         case 'resistor':
             if (showIllustrations) {
@@ -2436,24 +2518,171 @@ function drawComponentVisual(comp) {
                 addPassivePolarity(g, color);
                 break;
             }
-        case 'capacitor':
-            path.setAttribute('d', 'M -30,0 L -6,0 M 6,0 L 30,0');
-            path.setAttribute('stroke-linecap', 'round');
-            const cPlates = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-            cPlates.setAttribute('d', 'M -6,-15 L -6,15 M 6,-15 L 6,15');
-            cPlates.setAttribute('stroke', color);
-            cPlates.setAttribute('stroke-width', '4');
-            cPlates.setAttribute('fill', 'none');
-            cPlates.setAttribute('stroke-linecap', 'round');
-            g.appendChild(cPlates);
-            g.appendChild(path);
+        case 'capacitor': {
+                if (showIllustrations) {
+                    const gradId = `grad-cap-metal-${comp.id}`;
+                    if (!document.getElementById(gradId)) {
+                        const defs = document.getElementById('grid-svg').querySelector('defs') || 
+                                     document.getElementById('grid-svg').appendChild(document.createElementNS('http://www.w3.org/2000/svg', 'defs'));
+                        const grad = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                        grad.setAttribute('id', gradId);
+                        grad.setAttribute('x1', '0%'); grad.setAttribute('y1', '0%');
+                        grad.setAttribute('x2', '100%'); grad.setAttribute('y2', '0%');
+                        const stops = [
+                            { offset: '0%', color: '#ced4da' },
+                            { offset: '50%', color: '#e2e8f0' },
+                            { offset: '100%', color: '#adb5bd' }
+                        ];
+                        stops.forEach(s => {
+                            const stop = document.createElementNS('http://www.w3.org/2000/svg', 'stop');
+                            stop.setAttribute('offset', s.offset);
+                            stop.setAttribute('stop-color', s.color);
+                            grad.appendChild(stop);
+                        });
+                        defs.appendChild(grad);
+                    }
+
+                    // Plate 1
+                    const plate1 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    plate1.setAttribute('x', -8); plate1.setAttribute('y', -18);
+                    plate1.setAttribute('width', '5'); plate1.setAttribute('height', '36');
+                    plate1.setAttribute('fill', `url(#${gradId})`);
+                    plate1.setAttribute('stroke', '#cbd5e1');
+                    plate1.setAttribute('stroke-width', '1');
+                    plate1.setAttribute('rx', '1');
+                    
+                    // Plate 2
+                    const plate2 = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                    plate2.setAttribute('x', 3); plate2.setAttribute('y', -18);
+                    plate2.setAttribute('width', '5'); plate2.setAttribute('height', '36');
+                    plate2.setAttribute('fill', `url(#${gradId})`);
+                    plate2.setAttribute('stroke', '#cbd5e1');
+                    plate2.setAttribute('stroke-width', '1');
+                    plate2.setAttribute('rx', '1');
+                    
+                    path.setAttribute('d', 'M -30,0 L -8,0 M 8,0 L 30,0');
+                    path.setAttribute('stroke-linecap', 'round');
+                    
+                    g.appendChild(plate1);
+                    g.appendChild(plate2);
+                    g.appendChild(path);
+                } else {
+                    path.setAttribute('d', 'M -30,0 L -6,0 M 6,0 L 30,0');
+                    path.setAttribute('stroke-linecap', 'round');
+                    const cPlates = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    cPlates.setAttribute('d', 'M -6,-15 L -6,15 M 6,-15 L 6,15');
+                    cPlates.setAttribute('stroke', color);
+                    cPlates.setAttribute('stroke-width', '4');
+                    cPlates.setAttribute('fill', 'none');
+                    cPlates.setAttribute('stroke-linecap', 'round');
+                    g.appendChild(cPlates);
+                    g.appendChild(path);
+                }
+                addPassivePolarity(g, color);
+            }
+            break;
+        case 'inductor': {
+            if (showIllustrations) {
+                const indId = comp.id || 'ghost';
+                const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+                
+                // 芯材（コア）のグラデーション: 円柱状のハイライトを追加
+                const gradCore = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                gradCore.setAttribute('id', `grad-ind-core-${indId}`);
+                gradCore.setAttribute('x1', '0%'); gradCore.setAttribute('y1', '0%');
+                gradCore.setAttribute('x2', '0%'); gradCore.setAttribute('y2', '100%');
+                gradCore.innerHTML = `
+                    <stop offset="0%" style="stop-color:#94a3b8;stop-opacity:1" />
+                    <stop offset="25%" style="stop-color:#f1f5f9;stop-opacity:1" />
+                    <stop offset="45%" style="stop-color:#ffffff;stop-opacity:1" />
+                    <stop offset="65%" style="stop-color:#e2e8f0;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#64748b;stop-opacity:1" />
+                `;
+                
+                // 巻き線のグラデーション: 濃いブロンズ/カッパー
+                const gradWire = document.createElementNS('http://www.w3.org/2000/svg', 'linearGradient');
+                gradWire.setAttribute('id', `grad-ind-wire-${indId}`);
+                gradWire.setAttribute('x1', '0%'); gradWire.setAttribute('y1', '0%');
+                gradWire.setAttribute('x2', '0%'); gradWire.setAttribute('y2', '100%');
+                gradWire.innerHTML = `
+                    <stop offset="0%" style="stop-color:#78350f;stop-opacity:1" />
+                    <stop offset="100%" style="stop-color:#451a03;stop-opacity:1" />
+                `;
+                
+                defs.appendChild(gradCore);
+                defs.appendChild(gradWire);
+                g.appendChild(defs);
+
+                const loopCount = 6;
+                const step = 5; // ステップを短くして横幅を圧縮
+                const coreH = 14;
+                const startX = -(step * (loopCount - 1)) / 2;
+
+                // 1. 背面の巻き線 (上下反転に対応: M x,-H/2 L x,H/2)
+                for (let i = 0; i < loopCount; i++) {
+                    const x = startX + i * step;
+                    const backWire = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    backWire.setAttribute('d', `M ${x},${-coreH/2} L ${x},${coreH/2}`);
+                    backWire.setAttribute('stroke', '#451a03'); 
+                    backWire.setAttribute('stroke-width', '2');
+                    backWire.setAttribute('fill', 'none');
+                    g.appendChild(backWire);
+                }
+
+                // 2. 芯材 (本体円柱)
+                const core = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+                core.setAttribute('x', startX - step/2 - 2); core.setAttribute('y', -coreH/2);
+                core.setAttribute('width', (step * (loopCount - 1)) + step + 4); core.setAttribute('height', coreH);
+                core.setAttribute('rx', 2);
+                // 枠線を排除
+                core.setAttribute('fill', `url(#grad-ind-core-${indId})`);
+                core.setAttribute('stroke', 'none');
+                g.appendChild(core);
+
+                // 3. 前面の巻き線 (上下反転: 右斜め下への傾斜)
+                // 左端の開始線: リード(y=0)から右斜め下(y=H/2)へ
+                const startWire = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                startWire.setAttribute('d', `M ${startX - step/2},0 L ${startX},${coreH/2}`);
+                startWire.setAttribute('stroke', `url(#grad-ind-wire-${indId})`);
+                startWire.setAttribute('stroke-width', '2.2');
+                startWire.setAttribute('fill', 'none');
+                startWire.setAttribute('stroke-linecap', 'round');
+                g.appendChild(startWire);
+
+                for (let i = 0; i < loopCount; i++) {
+                    const x = startX + i * step;
+                    
+                    // 中間のメイン巻き線: 上(y=-H/2)から右斜め下(y=H/2)へ
+                    if (i < loopCount - 1) {
+                        const frontWire = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        frontWire.setAttribute('d', `M ${x},${-coreH/2} L ${x + step},${coreH/2}`);
+                        frontWire.setAttribute('stroke', `url(#grad-ind-wire-${indId})`);
+                        frontWire.setAttribute('stroke-width', '2.2');
+                        frontWire.setAttribute('fill', 'none');
+                        frontWire.setAttribute('stroke-linecap', 'round');
+                        g.appendChild(frontWire);
+                    } else {
+                        // 右端の終了線: 上(y=-H/2)から右斜め下(リード y=0)へ
+                        const endWire = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                        endWire.setAttribute('d', `M ${x},${-coreH/2} L ${x + step/2},0`);
+                        endWire.setAttribute('stroke', `url(#grad-ind-wire-${indId})`);
+                        endWire.setAttribute('stroke-width', '2.2');
+                        endWire.setAttribute('fill', 'none');
+                        endWire.setAttribute('stroke-linecap', 'round');
+                        g.appendChild(endWire);
+                    }
+                }
+
+                // リード線
+                path.setAttribute('d', `M -30,0 L ${startX - step/2},0 M ${startX + (loopCount-1)*step + step/2},0 L 30,0`);
+                g.appendChild(path);
+            } else {
+                path.setAttribute('d', 'M -30,0 L -15,0 M 15,0 L 30,0 M -15,0 C -15,-10 -7.5,-10 -7.5,0 C -7.5,-10 0,-10 0,0 C 0,-10 7.5,-10 7.5,0 C 7.5,-10 15,-10 15,0');
+                g.appendChild(path);
+            }
             addPassivePolarity(g, color);
             break;
-        case 'inductor':
-            path.setAttribute('d', 'M -30,0 L -15,0 M 15,0 L 30,0 M -15,0 C -15,-10 -7.5,-10 -7.5,0 C -7.5,-10 0,-10 0,0 C 0,-10 7.5,-10 7.5,0 C 7.5,-10 15,-10 15,0');
-            g.appendChild(path);
-            addPassivePolarity(g, color);
-            break;
+        }
         case 'voltmeter':
             if (showIllustrations) {
                 const { n1, n2 } = getCompNodeNames(comp);
@@ -2619,7 +2848,6 @@ function drawComponentVisual(comp) {
             const s2 = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             s2.setAttribute('cx', 10); s2.setAttribute('cy', 0); s2.setAttribute('r', 2); s2.setAttribute('fill', color);
             g.appendChild(s2);
-
             if (comp.value === 1) {
                 path.setAttribute('d', 'M -30,0 L -10,0 M -10,0 L 10,0 M 10,0 L 30,0');
             } else {
@@ -2930,6 +3158,35 @@ function updateToolbarIcons() {
             `;
         }
     }
+    const acIconBox = document.querySelector('.tool-item[data-type="ac_source"] .icon-box');
+    if (acIconBox) {
+        if (showIllustrations) {
+            acIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <defs>
+                        <linearGradient id="grad-icon-ac-body" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#4a5568;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#1a202c;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <rect x="-24" y="-18" width="48" height="36" rx="3" fill="url(#grad-icon-ac-body)" stroke="none" />
+                    <rect x="-18" y="-12" width="36" height="14" rx="1" fill="#0f172a" />
+                    <path d="M -12,-5 C -12,-10 -6,-10 -6,-5 C -6,0 0,0 0,-5 C 0,-10 6,-10 6,-5 C 6,0 12,0 12,-5" stroke="#38bdf8" stroke-width="1.5" fill="none" stroke-linecap="round" />
+                    <circle cx="-10" cy="8" r="3" fill="#94a3b8" />
+                    <circle cx="10" cy="8" r="3" fill="#94a3b8" />
+                    <path d="M -30,0 L -24,0 M 24,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" />
+                </svg>
+            `;
+        } else {
+            acIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <path d="M -30,0 L -18,0 M 18,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" />
+                    <circle cx="0" cy="0" r="18" fill="var(--inner-fill)" stroke="currentColor" stroke-width="2" />
+                    <path d="M -10,0 C -10,-6 -5,-6 0,0 C 5,6 10,6 10,0" stroke="currentColor" stroke-width="2" fill="none" />
+                </svg>
+            `;
+        }
+    }
 
     const resIconBox = document.querySelector('.tool-item[data-type="resistor"] .icon-box');
     if (resIconBox) {
@@ -3004,6 +3261,76 @@ function updateToolbarIcons() {
                     <circle cx="0" cy="0" r="14" fill="var(--inner-fill)" stroke="currentColor" stroke-width="2" />
                     <path d="M -9.9,-9.9 L 9.9,9.9 M -9.9,9.9 L 9.9,-9.9 M -30,0 L -14,0 M 14,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" />
                     <!-- 極性マーク -->
+                    <circle class="passive-polarity" cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                    <circle class="passive-polarity" cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
+                </svg>
+            `;
+        }
+    }
+    
+    const capIconBox = document.querySelector('.tool-item[data-type="capacitor"] .icon-box');
+    if (capIconBox) {
+        if (showIllustrations) {
+            capIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <defs>
+                        <linearGradient id="grad-icon-cap-metal" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" style="stop-color:#ced4da;stop-opacity:1" />
+                            <stop offset="50%" style="stop-color:#e2e8f0;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#adb5bd;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M -30,0 L -8,0 M 8,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" />
+                    <rect x="-8" y="-18" width="5" height="36" rx="1" fill="url(#grad-icon-cap-metal)" stroke="#cbd5e1" stroke-width="1" />
+                    <rect x="3" y="-18" width="5" height="36" rx="1" fill="url(#grad-icon-cap-metal)" stroke="#cbd5e1" stroke-width="1" />
+                    <!-- 極性マーク -->
+                    <circle class="passive-polarity" cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                    <circle class="passive-polarity" cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
+                </svg>
+            `;
+        } else {
+            capIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <path d="M -30,0 L -6,0 M 6,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" />
+                    <path d="M -6,-15 L -6,15 M 6,-15 L 6,15" stroke="currentColor" stroke-width="4" fill="none" stroke-linecap="round" />
+                    <circle class="passive-polarity" cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                    <circle class="passive-polarity" cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
+                </svg>
+            `;
+        }
+    }
+    const indIconBox = document.querySelector('.tool-item[data-type="inductor"] .icon-box');
+    if (indIconBox) {
+        if (showIllustrations) {
+            indIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <defs>
+                        <linearGradient id="grad-icon-ind-core" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#94a3b8;stop-opacity:1" />
+                            <stop offset="30%" style="stop-color:#ffffff;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#64748b;stop-opacity:1" />
+                        </linearGradient>
+                        <linearGradient id="grad-icon-ind-wire" x1="0%" y1="0%" x2="0%" y2="100%">
+                            <stop offset="0%" style="stop-color:#78350f;stop-opacity:1" />
+                            <stop offset="100%" style="stop-color:#451a03;stop-opacity:1" />
+                        </linearGradient>
+                    </defs>
+                    <path d="M -30,0 L -18.5,0 M 18.5,0 L 30,0" stroke="currentColor" stroke-width="2" fill="none" />
+                    <!-- Back wires -->
+                    <path d="M -16,-6 L -16,6 M -8,-6 L -8,6 M 0,-6 L 0,6 M 8,-6 L 8,6 M 16,-6 L 16,6" stroke="#451a03" stroke-width="2" fill="none" />
+                    <!-- Core -->
+                    <rect x="-20" y="-7" width="40" height="14" rx="2" fill="url(#grad-icon-ind-core)" stroke="none" />
+                    <!-- Front wires (Parallel / Slant / Flipped) -->
+                    <path d="M -20,0 L -16,6 M -16,-6 L -8,6 M -8,-6 L 0,6 M 0,-6 L 8,6 M 8,-6 L 16,6 M 16,-6 L 20,0" stroke="url(#grad-icon-ind-wire)" stroke-width="2.2" fill="none" stroke-linecap="round" />
+                    <!-- 極性マーク -->
+                    <circle class="passive-polarity" cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
+                    <circle class="passive-polarity" cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
+                </svg>
+            `;
+        } else {
+            indIconBox.innerHTML = `
+                <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
+                    <path d="M -30,0 L -15,0 M 15,0 L 30,0 M -15,0 C -15,-10 -7.5,-10 -7.5,0 C -7.5,-10 0,-10 0,0 C 0,-10 7.5,-10 7.5,0 C 7.5,-10 15,-10 15,0" stroke="currentColor" stroke-width="2" fill="none" />
                     <circle class="passive-polarity" cx="-26" cy="0" r="4" fill="#ff0000" stroke="currentColor" stroke-width="1"/>
                     <circle class="passive-polarity" cx="26" cy="0" r="4" fill="#777777" stroke="currentColor" stroke-width="1"/>
                 </svg>
