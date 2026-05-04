@@ -21,7 +21,7 @@ class Simulator3D {
         this.meshes = [];
         this.particleMesh = null;
         this.isActive = false;
-        
+
         this.GRID_SCALE = 50; // Visual scale factor for grid X/Y
         this.Z_SCALE = 30;    // Visual scale factor for voltage Z
         this.textureParams = {}; // Cache to avoid recreating textures unnecessarily
@@ -35,7 +35,7 @@ class Simulator3D {
 
         const width = this.container.clientWidth;
         const height = this.container.clientHeight;
-        
+
         this.camera = new THREE.PerspectiveCamera(45, width / height, 1, 10000);
         this.camera.position.set(0, -600, 600); // Isometric-ish
         this.camera.up.set(0, 0, 1); // Z is up
@@ -52,7 +52,7 @@ class Simulator3D {
 
         const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
         this.scene.add(ambientLight);
-        
+
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
         dirLight.position.set(100, -100, 500);
         this.scene.add(dirLight);
@@ -60,10 +60,10 @@ class Simulator3D {
         // 動的グリッド用のグループ
         this.gridLines = new THREE.Group();
         this.scene.add(this.gridLines);
-        
+
         this.GRID_SIZE_X = 11;
         this.GRID_SIZE_Y = 7;
-        
+
         // 電荷表示用のインスタンスメッシュ（最大2000個）
         const particleGeo = new THREE.SphereGeometry(4, 8, 8);
         const particleMat = new THREE.MeshBasicMaterial({ color: 0xfcc419 });
@@ -72,7 +72,7 @@ class Simulator3D {
         this.scene.add(this.particleMesh);
 
         window.addEventListener('resize', () => this.onWindowResize());
-        
+
         this.animate();
     }
 
@@ -139,18 +139,18 @@ class Simulator3D {
 
         components.forEach(comp => {
             const geometry = new THREE.BufferGeometry();
-            
+
             // Dummy vertices, will be set in update()
             const vertices = new Float32Array(30 * 3);
             geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
 
-            const uvs = new Float32Array([...[0,1, 1,1, 0,0, 1,1, 1,0, 0,0], ...(new Array(24 * 2).fill(0))]);
+            const uvs = new Float32Array([...[0, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 0], ...(new Array(24 * 2).fill(0))]);
             geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
             geometry.computeVertexNormals();
 
             const texture = this.getComponentTexture(comp);
             const topMaterial = new THREE.MeshPhongMaterial({ map: texture, transparent: true, opacity: 0.9, side: THREE.DoubleSide });
-            
+
             let sideColor = 0xffffff;
             if (comp.type === 'battery') sideColor = 0xffcccc;
             else if (comp.type === 'resistor') sideColor = 0xffffcc;
@@ -164,7 +164,7 @@ class Simulator3D {
 
             const mesh = new THREE.Mesh(geometry, [topMaterial, sideMaterial]);
             mesh.userData.comp = comp; // store reference
-            
+
             // Edges will be added dynamically in update since geometry changes
 
             this.scene.add(mesh);
@@ -219,7 +219,7 @@ class Simulator3D {
             if (comp.type === 'battery' || comp.type === 'ac_source' || comp.type === 'capacitor' || comp.type === 'inductor') {
                 const isHoriz = (comp.rotation === 0 || comp.rotation === 2);
                 const n1 = isHoriz ? `v_${comp.x}_${comp.y}` : `h_${comp.x}_${comp.y}`;
-                const n2 = isHoriz ? `v_${comp.x+1}_${comp.y}` : `h_${comp.x}_${comp.y+1}`;
+                const n2 = isHoriz ? `v_${comp.x + 1}_${comp.y}` : `h_${comp.x}_${comp.y + 1}`;
                 const v1 = simulationResults.voltages[n1];
                 const v2 = simulationResults.voltages[n2];
                 // 実質的に機能している（MNAで電位差が解かれている）電源や蓄電素子をアクティブの起点とする。
@@ -233,19 +233,19 @@ class Simulator3D {
             }
         });
         let changed = true;
-        while(changed) {
+        while (changed) {
             changed = false;
             this.circuitComponents.forEach(comp => {
                 if (comp.type === 'switch' && comp.value !== 1) return; // 開いたスイッチは伝播しない
 
-                const isHoriz = (comp.rotation === 0 || comp.rotation === 2 || (comp.type === 'wire' && (comp.rotation===0||comp.rotation===2)));
+                const isHoriz = (comp.rotation === 0 || comp.rotation === 2 || (comp.type === 'wire' && (comp.rotation === 0 || comp.rotation === 2)));
                 let nodesForComp = [];
                 if (['wire_l', 'wire_t'].includes(comp.type)) {
-                    nodesForComp = [`v_${comp.x}_${comp.y}`, `v_${comp.x+1}_${comp.y}`, `h_${comp.x}_${comp.y}`, `h_${comp.x}_${comp.y+1}`];
+                    nodesForComp = [`v_${comp.x}_${comp.y}`, `v_${comp.x + 1}_${comp.y}`, `h_${comp.x}_${comp.y}`, `h_${comp.x}_${comp.y + 1}`];
                 } else if (isHoriz) {
-                    nodesForComp = [`v_${comp.x}_${comp.y}`, `v_${comp.x+1}_${comp.y}`];
+                    nodesForComp = [`v_${comp.x}_${comp.y}`, `v_${comp.x + 1}_${comp.y}`];
                 } else {
-                    nodesForComp = [`h_${comp.x}_${comp.y}`, `h_${comp.x}_${comp.y+1}`];
+                    nodesForComp = [`h_${comp.x}_${comp.y}`, `h_${comp.x}_${comp.y + 1}`];
                 }
 
                 const hasActive = nodesForComp.some(n => activeNodes.has(n));
@@ -274,7 +274,7 @@ class Simulator3D {
             const getV = (node) => {
                 let v = simulationResults.voltages[node];
                 if (!activeNodes.has(node) || v === undefined || isNaN(v) || !isFinite(v)) return minV;
-                return v; 
+                return v;
             };
 
             const vL = getV(leftNode);
@@ -288,9 +288,9 @@ class Simulator3D {
                 !activeNodes.has(topNode) ? undefined : simulationResults.voltages[topNode],
                 !activeNodes.has(bottomNode) ? undefined : simulationResults.voltages[bottomNode]
             ].filter(v => v !== undefined);
-            
+
             const eqV = definedVolts.length > 0 ? definedVolts[0] : minV;
-            
+
             let isHorizontal = true;
             let vStart = minV, vEnd = minV;
 
@@ -311,7 +311,7 @@ class Simulator3D {
                     vStart = Math.min(...activeVs);
                     vEnd = Math.max(...activeVs);
                 }
-            } else if (comp.rotation === 0 || comp.rotation === 2 || (comp.type === 'wire' && (comp.rotation===0||comp.rotation===2))) {
+            } else if (comp.rotation === 0 || comp.rotation === 2 || (comp.type === 'wire' && (comp.rotation === 0 || comp.rotation === 2))) {
                 isHorizontal = true;
                 vStart = vL; vEnd = vR;
             } else {
@@ -333,28 +333,28 @@ class Simulator3D {
                 const i = simulationResults.currents[comp.id] || 0;
                 const rInt = (comp.rInt !== undefined) ? comp.rInt : 0.001;
                 const vIr = i * rInt;
-                
+
                 if (comp.type === 'battery') {
                     const emf = parseFloat(comp.value) || 0;
                     if (comp.rotation === 0 || comp.rotation === 1) {
                         // vStart: Pos, vEnd: Neg. Peak is always vEnd + EMF
-                        profile = [ [0, vStart], [0.5, vEnd + emf], [0.51, vEnd], [1, vEnd] ];
+                        profile = [[0, vStart], [0.5, vEnd + emf], [0.51, vEnd], [1, vEnd]];
                     } else {
                         // vStart: Neg, vEnd: Pos. Peak is always vStart + EMF
-                        profile = [ [0, vStart], [0.49, vStart], [0.5, vStart + emf], [1, vEnd] ];
+                        profile = [[0, vStart], [0.49, vStart], [0.5, vStart + emf], [1, vEnd]];
                     }
                 } else {
                     // ac_source stays relative to handle animation
                     if (comp.rotation === 0 || comp.rotation === 1) {
-                        profile = [ [0, vStart], [0.5, vStart - vIr], [0.51, vEnd], [1, vEnd] ];
+                        profile = [[0, vStart], [0.5, vStart - vIr], [0.51, vEnd], [1, vEnd]];
                     } else {
-                        profile = [ [0, vStart], [0.49, vStart], [0.5, vEnd - vIr], [1, vEnd] ];
+                        profile = [[0, vStart], [0.49, vStart], [0.5, vEnd - vIr], [1, vEnd]];
                     }
                 }
             } else if (['capacitor', 'switch'].includes(comp.type)) {
-                profile = [ [0, vStart], [0.49, vStart], [0.51, vEnd], [1, vEnd] ];
+                profile = [[0, vStart], [0.49, vStart], [0.51, vEnd], [1, vEnd]];
             } else {
-                profile = [ [0, vStart], [1, vEnd] ];
+                profile = [[0, vStart], [1, vEnd]];
             }
 
             const topVerts = [];
@@ -386,7 +386,7 @@ class Simulator3D {
 
             for (let i = 0; i < profile.length - 1; i++) {
                 const tA = profile[i][0], zA = profile[i][1] * this.Z_SCALE;
-                const tB = profile[i+1][0], zB = profile[i+1][1] * this.Z_SCALE;
+                const tB = profile[i + 1][0], zB = profile[i + 1][1] * this.Z_SCALE;
 
                 let pTL, pTR, pBL, pBR;
                 let uvTL, uvTR, uvBL, uvBR;
@@ -399,18 +399,33 @@ class Simulator3D {
                     uvTL = [tA, 1]; uvTR = [tB, 1];
                     uvBL = [tA, 0]; uvBR = [tB, 0];
                 } else {
-                    const ya = y0 - tA * (y0 - y1); 
+                    const ya = y0 - tA * (y0 - y1);
                     const yb = y0 - tB * (y0 - y1);
                     pTL = [x0, ya, zA]; pTR = [x1, ya, zA];
                     pBL = [x0, yb, zB]; pBR = [x1, yb, zB];
                     uvTL = [0, 1 - tA]; uvTR = [1, 1 - tA];
                     uvBL = [0, 1 - tB]; uvBR = [1, 1 - tB];
                 }
-                
+
+                // スイッチ（OFF時）のみ中間セグメントを隙間にする
+                const isGap = (i === 1) && (comp.type === 'switch' && comp.value === 0);
+
+                if (isGap) {
+                    // 断面を閉じる
+                    if (isHorizontal) {
+                        addWall(pBL, pTL); // 前半部分の右端
+                        addWall(pTR, pBR); // 後半部分の左端
+                    } else {
+                        addWall(pTL, pTR); // 前半部分の下端
+                        addWall(pBR, pBL); // 後半部分の上端
+                    }
+                    continue; // 表面ポリゴンの描画をスキップ
+                }
+
                 addQuad(pTL, pTR, pBL, pBR, uvTL, uvTR, uvBL, uvBR);
 
                 if (isHorizontal) {
-                    addWall(pTR, pTL); 
+                    addWall(pTR, pTL);
                     addWall(pBL, pBR);
                 } else {
                     addWall(pTL, pBL);
@@ -450,9 +465,9 @@ class Simulator3D {
 
             // パネルの周りは実線
             const topEdges = new THREE.EdgesGeometry(topGeometry);
-            const topLines = new THREE.LineSegments(topEdges, new THREE.LineBasicMaterial({ 
-                color: 0x555555, 
-                opacity: 0.4, 
+            const topLines = new THREE.LineSegments(topEdges, new THREE.LineBasicMaterial({
+                color: 0x555555,
+                opacity: 0.4,
                 transparent: true
             }));
             topLines.visible = !isBulbLit; // 点灯中は非表示
@@ -460,11 +475,11 @@ class Simulator3D {
 
             // 高さに当たる側面は点線
             const wallEdges = new THREE.EdgesGeometry(wallGeometry);
-            const wallLines = new THREE.LineSegments(wallEdges, new THREE.LineDashedMaterial({ 
-                color: 0x555555, 
-                opacity: 0.5, 
+            const wallLines = new THREE.LineSegments(wallEdges, new THREE.LineDashedMaterial({
+                color: 0x555555,
+                opacity: 0.5,
                 transparent: true,
-                dashSize: 4, 
+                dashSize: 4,
                 gapSize: 3
             }));
             wallLines.computeLineDistances();
@@ -487,7 +502,7 @@ class Simulator3D {
         else if (comp.type === 'bulb' && this.simulationResults) {
             stateValue = Math.abs(this.simulationResults.currents[comp.id] || 0);
         }
-        
+
         const stateKey = (comp.type === 'switch' || comp.type === 'bulb') ? (stateValue > 0.01 ? "on" : "off") : "";
         const themeKey = isDarkMode ? "dark" : "light";
         const illKey = (typeof showIllustrations !== 'undefined' && showIllustrations) ? "ill_v29" : "sym_v29";
@@ -515,7 +530,7 @@ class Simulator3D {
         else if (comp.type === 'voltmeter') ctx.fillStyle = '#ffd700';
         else if (comp.type === 'ammeter') ctx.fillStyle = '#0099FF';
         else ctx.fillStyle = '#ffffff';
-        
+
         ctx.fillRect(0, 0, 128, 128);
 
         ctx.strokeStyle = color;
@@ -533,14 +548,14 @@ class Simulator3D {
         } else if (comp.type === 'wire_l') {
             ctx.moveTo(0, -64); ctx.lineTo(0, 0); ctx.lineTo(64, 0);
         } else if (comp.type === 'wire_t') {
-            ctx.moveTo(-64, 0); ctx.lineTo(64, 0); 
+            ctx.moveTo(-64, 0); ctx.lineTo(64, 0);
             ctx.moveTo(0, 0); ctx.lineTo(0, 64);
             ctx.stroke(); ctx.beginPath();
-            ctx.fillStyle = '#000'; ctx.arc(0,0,4,0,Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#000'; ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
         } else if (comp.type === 'resistor') {
             if (typeof showIllustrations !== 'undefined' && showIllustrations) {
                 // イラスト描画 (3D用テクスチャ: リアルな抵抗器)
-                
+
                 // 導線を最初に描画
                 ctx.beginPath();
                 ctx.strokeStyle = color;
@@ -574,7 +589,7 @@ class Simulator3D {
                     ctx.fillStyle = c;
                     ctx.fillRect(bandX[i], -20, 6, 40);
                 });
-                
+
                 // ハイライト
                 ctx.fillStyle = 'rgba(255,255,255,0.1)';
                 ctx.fillRect(-40, -15, 80, 6);
@@ -592,7 +607,7 @@ class Simulator3D {
         } else if (comp.type === 'battery') {
             if (typeof showIllustrations !== 'undefined' && showIllustrations) {
                 // イラスト描画 (3D用テクスチャ: リアルな実物風デザイン)
-                
+
                 // 導線を最初に描画 (重なりの一番下、左右均等化)
                 ctx.beginPath();
                 ctx.strokeStyle = color;
@@ -607,7 +622,7 @@ class Simulator3D {
                 gradBody.addColorStop(0.3, '#e03131');
                 gradBody.addColorStop(0.7, '#c92a2a');
                 gradBody.addColorStop(1, '#a52828');
-                
+
                 // 金属端子のグラデーション
                 const gradMetal = ctx.createLinearGradient(0, -12, 0, 12);
                 gradMetal.addColorStop(0, '#f8f9fa');
@@ -617,22 +632,22 @@ class Simulator3D {
                 // プラス端子（左側の金属突起）: -56+5.5 = -50.5
                 ctx.fillStyle = gradMetal;
                 ctx.fillRect(-50.5, -12, 11, 24);
-                
+
                 // 本体: -45+5.5 = -39.5
                 ctx.fillStyle = gradBody;
                 ctx.fillRect(-39.5, -32, 90, 64);
-                
+
                 // ハイライト
                 ctx.fillStyle = 'rgba(255,255,255,0.2)';
                 ctx.fillRect(-39.5, -24, 90, 8);
-                
+
                 // 記号と稲妻
                 ctx.fillStyle = '#fff';
                 ctx.font = 'bold 32px Arial';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText('+', -19.5, 5);
-                
+
                 // 稲妻マークの描画 (5.5ずらす)
                 ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
                 ctx.strokeStyle = 'rgba(255, 255, 255, 0)';
@@ -652,7 +667,7 @@ class Simulator3D {
                 ctx.moveTo(-64, 0); ctx.lineTo(-15, 0);
                 ctx.moveTo(15, 0); ctx.lineTo(64, 0);
                 ctx.stroke(); ctx.beginPath();
-                
+
                 ctx.lineWidth = 9; // 以前決定した最適な太さ
                 ctx.moveTo(-15, -30); ctx.lineTo(-15, 30); // 長い極板
                 ctx.moveTo(15, -16); ctx.lineTo(15, 16);   // 短い極板
@@ -662,7 +677,7 @@ class Simulator3D {
         } else if (comp.type === 'ac_source') {
             if (typeof showIllustrations !== 'undefined' && showIllustrations) {
                 // イラスト描画 (3D用テクスチャ: 交流電源装置)
-                
+
                 // 1. 筐体 (ダークグレーのメタリック調)
                 const gradBody = ctx.createLinearGradient(0, -40, 0, 40);
                 gradBody.addColorStop(0, '#4a5568');
@@ -703,7 +718,7 @@ class Simulator3D {
                     ctx.strokeStyle = '#475569';
                     ctx.lineWidth = 1;
                     ctx.stroke();
-                    
+
                     // 指標線
                     ctx.strokeStyle = '#1e293b';
                     ctx.beginPath();
@@ -725,7 +740,7 @@ class Simulator3D {
                 ctx.moveTo(36, 0); ctx.lineTo(64, 0);
                 ctx.stroke(); ctx.beginPath();
                 ctx.fillStyle = '#ffffff';
-                ctx.arc(0, 0, 36, 0, Math.PI*2);
+                ctx.arc(0, 0, 36, 0, Math.PI * 2);
                 ctx.fill();
                 ctx.lineWidth = 6; // 交流電源は太め(6)
                 ctx.stroke(); ctx.beginPath();
@@ -743,26 +758,26 @@ class Simulator3D {
                 gradPlate1.addColorStop(0, '#ced4da');
                 gradPlate1.addColorStop(0.5, '#e2e8f0');
                 gradPlate1.addColorStop(1, '#adb5bd');
-                
+
                 // 2. 極板2 (右) のグラデーション: 2Dと完全に一致
                 const gradPlate2 = ctx.createLinearGradient(10, 0, 22, 0);
                 gradPlate2.addColorStop(0, '#ced4da');
                 gradPlate2.addColorStop(0.5, '#e2e8f0');
                 gradPlate2.addColorStop(1, '#adb5bd');
-                
+
                 ctx.strokeStyle = '#cbd5e1';
                 ctx.lineWidth = 1;
-                
+
                 // Plate 1 描画
                 ctx.fillStyle = gradPlate1;
                 ctx.fillRect(-22, -40, 12, 80);
                 ctx.strokeRect(-22, -40, 12, 80);
-                
+
                 // Plate 2 描画
                 ctx.fillStyle = gradPlate2;
                 ctx.fillRect(10, -40, 12, 80);
                 ctx.strokeRect(10, -40, 12, 80);
-                
+
                 ctx.beginPath();
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 3;
@@ -773,7 +788,7 @@ class Simulator3D {
                 ctx.moveTo(-64, 0); ctx.lineTo(-15, 0);
                 ctx.moveTo(15, 0); ctx.lineTo(64, 0);
                 ctx.stroke(); ctx.beginPath();
-                
+
                 ctx.lineWidth = 9;
                 ctx.moveTo(-15, -30); ctx.lineTo(-15, 30);
                 ctx.moveTo(15, -30); ctx.lineTo(15, 30);
@@ -784,13 +799,13 @@ class Simulator3D {
             ctx.moveTo(-64, 0); ctx.lineTo(-15, 0);
             ctx.moveTo(15, 0); ctx.lineTo(64, 0);
             ctx.stroke(); ctx.beginPath();
-            ctx.fillStyle='#000'; 
-            ctx.arc(-15,0,5,0,Math.PI*2); ctx.fill(); ctx.beginPath();
+            ctx.fillStyle = '#000';
+            ctx.arc(-15, 0, 5, 0, Math.PI * 2); ctx.fill(); ctx.beginPath();
             if (comp.value === 1) {
                 ctx.moveTo(-15, 0); ctx.lineTo(15, 0);
                 ctx.stroke(); ctx.beginPath();
             }
-            ctx.arc(15,0,5,0,Math.PI*2); ctx.fill(); ctx.beginPath();
+            ctx.arc(15, 0, 5, 0, Math.PI * 2); ctx.fill(); ctx.beginPath();
         } else if (comp.type === 'bulb') {
             if (typeof showIllustrations !== 'undefined' && showIllustrations) {
                 const isLit = state > 0.01;
@@ -861,8 +876,8 @@ class Simulator3D {
                 ctx.moveTo(28, 0); ctx.lineTo(64, 0);
                 ctx.stroke(); ctx.beginPath();
                 ctx.fillStyle = '#ffffff';
-                ctx.arc(0, 0, 28, 0, Math.PI*2);
-                ctx.fill(); 
+                ctx.arc(0, 0, 28, 0, Math.PI * 2);
+                ctx.fill();
                 ctx.lineWidth = 4; // 電球は少し控えめ(4)
                 ctx.stroke(); ctx.beginPath();
                 ctx.lineWidth = 3; // 元に戻す
@@ -873,7 +888,7 @@ class Simulator3D {
         } else if (comp.type === 'inductor') {
             if (typeof showIllustrations !== 'undefined' && showIllustrations) {
                 // イラスト描画 (3D用テクスチャ: 芯材付きコイル)
-                
+
                 // 1. グラデーション定義
                 const gradCore = ctx.createLinearGradient(0, -15, 0, 15);
                 gradCore.addColorStop(0, '#94a3b8');
@@ -881,11 +896,11 @@ class Simulator3D {
                 gradCore.addColorStop(0.5, '#ffffff');
                 gradCore.addColorStop(0.7, '#e2e8f0');
                 gradCore.addColorStop(1, '#64748b');
-                
+
                 const gradWire = ctx.createLinearGradient(0, -15, 0, 15);
                 gradWire.addColorStop(0, '#78350f');
                 gradWire.addColorStop(1, '#451a03');
-                
+
                 const step = 10; // ステップを短く調整
                 const coreH = 28;
                 const loopCount = 6;
@@ -898,14 +913,14 @@ class Simulator3D {
                 for (let i = 0; i < loopCount; i++) {
                     const x = startX + i * step;
                     ctx.beginPath();
-                    ctx.moveTo(x, -coreH/2); ctx.lineTo(x, coreH/2);
+                    ctx.moveTo(x, -coreH / 2); ctx.lineTo(x, coreH / 2);
                     ctx.stroke();
                 }
 
                 // 3. 芯材 (コア)
                 ctx.fillStyle = gradCore;
                 ctx.beginPath();
-                ctx.roundRect(startX - step/2 - 4, -coreH/2, coreW + step + 8, coreH, 6);
+                ctx.roundRect(startX - step / 2 - 4, -coreH / 2, coreW + step + 8, coreH, 6);
                 ctx.fill();
                 // 枠線を排除
 
@@ -913,23 +928,23 @@ class Simulator3D {
                 ctx.strokeStyle = gradWire;
                 ctx.lineWidth = 4;
                 ctx.lineCap = 'round';
-                
+
                 // 左端開始線
                 ctx.beginPath();
-                ctx.moveTo(startX - step/2, 0);
-                ctx.lineTo(startX, coreH/2);
+                ctx.moveTo(startX - step / 2, 0);
+                ctx.lineTo(startX, coreH / 2);
                 ctx.stroke();
 
                 for (let i = 0; i < loopCount; i++) {
                     const x = startX + i * step;
                     if (i < loopCount - 1) {
                         ctx.beginPath();
-                        ctx.moveTo(x, -coreH/2); ctx.lineTo(x + step, coreH/2);
+                        ctx.moveTo(x, -coreH / 2); ctx.lineTo(x + step, coreH / 2);
                         ctx.stroke();
                     } else {
                         // 右端終了線
                         ctx.beginPath();
-                        ctx.moveTo(x, -coreH/2); ctx.lineTo(x + step/2, 0);
+                        ctx.moveTo(x, -coreH / 2); ctx.lineTo(x + step / 2, 0);
                         ctx.stroke();
                     }
                 }
@@ -938,8 +953,8 @@ class Simulator3D {
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 3;
                 ctx.beginPath();
-                ctx.moveTo(-64, 0); ctx.lineTo(startX - step/2, 0);
-                ctx.moveTo(startX + (loopCount-1)*step + step/2, 0); ctx.lineTo(64, 0);
+                ctx.moveTo(-64, 0); ctx.lineTo(startX - step / 2, 0);
+                ctx.moveTo(startX + (loopCount - 1) * step + step / 2, 0); ctx.lineTo(64, 0);
                 ctx.stroke();
             } else {
                 ctx.lineWidth = 3;
@@ -947,9 +962,9 @@ class Simulator3D {
                 ctx.stroke(); ctx.beginPath();
                 ctx.lineWidth = 4; // コイル部分は4
                 ctx.arc(-22.5, 0, 7.5, Math.PI, 0);
-                ctx.arc(-7.5,  0, 7.5, Math.PI, 0);
-                ctx.arc(7.5,   0, 7.5, Math.PI, 0);
-                ctx.arc(22.5,  0, 7.5, Math.PI, 0);
+                ctx.arc(-7.5, 0, 7.5, Math.PI, 0);
+                ctx.arc(7.5, 0, 7.5, Math.PI, 0);
+                ctx.arc(22.5, 0, 7.5, Math.PI, 0);
                 ctx.stroke(); ctx.beginPath();
                 ctx.lineWidth = 3; // 元に戻す
                 ctx.moveTo(30, 0); ctx.lineTo(64, 0);
@@ -958,11 +973,11 @@ class Simulator3D {
         } else if (comp.type === 'voltmeter' || comp.type === 'ammeter') {
             if (typeof showIllustrations !== 'undefined' && showIllustrations) {
                 const isV = comp.type === 'voltmeter';
-                const val = (this.simulationResults) ? (isV ? 
-                    (function() {
+                const val = (this.simulationResults) ? (isV ?
+                    (function () {
                         const { n1, n2 } = getCompNodeNames(comp);
                         return ((this.simulationResults.voltages[n1] || 0) - (this.simulationResults.voltages[n2] || 0));
-                    }.bind(this))() : 
+                    }.bind(this))() :
                     (this.simulationResults.currents[comp.id] || 0)) : 0;
 
                 // 導線
@@ -997,7 +1012,7 @@ class Simulator3D {
                 const maxLimit = comp.range || (isV ? 300 : 5);
                 const ratio = Math.max(Math.min(val / maxLimit, 1.1), -0.1);
                 const angle = (-50 + ratio * 100) * Math.PI / 180;
-                
+
                 ctx.save();
                 ctx.translate(0, 10);
                 ctx.rotate(angle);
@@ -1018,9 +1033,9 @@ class Simulator3D {
 
                 // 端子 (プラス:赤, マイナス:黒)
                 ctx.fillStyle = '#ff4444';
-                ctx.beginPath(); ctx.arc(-22, 26, 6, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(-22, 26, 6, 0, Math.PI * 2); ctx.fill();
                 ctx.fillStyle = '#333333';
-                ctx.beginPath(); ctx.arc(22, 26, 6, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(22, 26, 6, 0, Math.PI * 2); ctx.fill();
                 ctx.beginPath(); // 後続の stroke() が端子に適用されないようにパスをクリア
             } else {
                 const t = comp.type === 'voltmeter' ? 'V' : 'A';
@@ -1029,8 +1044,8 @@ class Simulator3D {
                 ctx.moveTo(28, 0); ctx.lineTo(64, 0);
                 ctx.stroke(); ctx.beginPath();
                 ctx.fillStyle = '#ffffff';
-                ctx.arc(0, 0, 28, 0, Math.PI*2);
-                ctx.fill(); 
+                ctx.arc(0, 0, 28, 0, Math.PI * 2);
+                ctx.fill();
                 ctx.lineWidth = 5; // 円を少し太く(6から5に微調整)
                 ctx.stroke(); ctx.beginPath();
                 ctx.lineWidth = 3; // 元に戻す
@@ -1042,10 +1057,10 @@ class Simulator3D {
 
                 // 図記号モードでも端子は表示 (2Dの X=26 を2倍して 52)
                 ctx.fillStyle = '#ff0000';
-                ctx.beginPath(); ctx.arc(-52, 0, 8, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(-52, 0, 8, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
                 ctx.fillStyle = '#777777';
-                ctx.beginPath(); ctx.arc(52, 0, 8, 0, Math.PI*2); ctx.fill();
+                ctx.beginPath(); ctx.arc(52, 0, 8, 0, Math.PI * 2); ctx.fill();
                 ctx.stroke();
             }
         }
@@ -1100,18 +1115,18 @@ class Simulator3D {
 
         let count = 0;
         const dummy = new THREE.Object3D();
-        
+
         // クラス共通の最小電位を基準とする（未設定なら0）
         const minV = this.minV !== undefined ? this.minV : 0;
 
         components.forEach(comp => {
             const cx = (comp.x + 0.5 - this.cx) * this.GRID_SCALE;
             const cy = -(comp.y + 0.5 - this.cy) * this.GRID_SCALE;
-            
+
             const leftNode = `v_${comp.x}_${comp.y}`;
-            const rightNode = `v_${comp.x+1}_${comp.y}`;
+            const rightNode = `v_${comp.x + 1}_${comp.y}`;
             const topNode = `h_${comp.x}_${comp.y}`;
-            const bottomNode = `h_${comp.x}_${comp.y+1}`;
+            const bottomNode = `h_${comp.x}_${comp.y + 1}`;
 
             const getV = (node) => (simulationResults.voltages[node] !== undefined ? simulationResults.voltages[node] : minV);
             // 素子が等電位である場合に、接続されているいずれかのノードから有効な電位を取得する
@@ -1124,7 +1139,7 @@ class Simulator3D {
             if (comp.type === 'wire_t') {
                 const eqV = getAnyV(); // T字は等電位
                 const z = (eqV - minV) * this.Z_SCALE;
-                
+
                 let activeSides = [];
                 if (comp.rotation === 0) activeSides = ['left', 'right', 'bottom'];
                 else if (comp.rotation === 1) activeSides = ['top', 'bottom', 'left'];
@@ -1172,7 +1187,7 @@ class Simulator3D {
                     if (comp.rotation === 1) { const tx = rx; rx = -ry; ry = tx; }
                     else if (comp.rotation === 2) { rx = -rx; ry = -ry; }
                     else if (comp.rotation === 3) { const tx = rx; rx = ry; ry = -tx; }
-                    
+
                     const z = (vStart + (vEnd - vStart) * prog - minV) * this.Z_SCALE;
                     dummy.position.set(cx + rx * this.GRID_SCALE, cy - ry * this.GRID_SCALE, z + 2);
                     dummy.updateMatrix();
@@ -1184,7 +1199,7 @@ class Simulator3D {
                 else if (comp.rotation === 1) { v1 = getV(topNode); v2 = getV(bottomNode); }
                 else if (comp.rotation === 2) { v1 = getV(rightNode); v2 = getV(leftNode); }
                 else { v1 = getV(bottomNode); v2 = getV(topNode); }
-                
+
                 // 1. Static Stored Charges (Plate Colony)
                 const plateDiff = v1 - v2;
                 const numStatic = Math.min(Math.round(Math.abs(plateDiff) * 8), 40);
@@ -1196,24 +1211,24 @@ class Simulator3D {
                         const hash2 = Math.abs(Math.sin(s * 78.233 + comp.x * 12.9898 + comp.y * 3) * 43758.5453);
                         const rand1 = hash1 - Math.floor(hash1);
                         const rand2 = hash2 - Math.floor(hash2);
-                        
-                        const rY = -0.23 + rand1 * 0.46; 
+
+                        const rY = -0.23 + rand1 * 0.46;
                         const rX = -0.025 + rand2 * 0.05;
-                        
+
                         let lx, ly, z;
                         const isIll = (typeof showIllustrations !== 'undefined' && showIllustrations);
                         const v1Offset = (comp.rotation === 0) ? (isIll ? -0.125 : -0.117) : (comp.rotation === 1) ? (isIll ? 0.125 : 0.117) : (comp.rotation === 2) ? (isIll ? 0.125 : 0.117) : (isIll ? -0.125 : -0.117);
                         const v2Offset = -v1Offset;
-                        
+
                         if (comp.rotation === 0 || comp.rotation === 2) {
-                            lx = (isV1Positive ? v1Offset : v2Offset) + (isV1Positive ? rX : -rX); 
+                            lx = (isV1Positive ? v1Offset : v2Offset) + (isV1Positive ? rX : -rX);
                             ly = rY;
                         } else {
                             ly = (isV1Positive ? v1Offset : v2Offset) - (isV1Positive ? rX : -rX);
                             lx = rY;
                         }
                         z = (isV1Positive ? v1 : v2);
-                        
+
                         dummy.position.set(cx + lx * this.GRID_SCALE, cy + ly * this.GRID_SCALE, (z - minV) * this.Z_SCALE + 2);
                         dummy.updateMatrix();
                         this.particleMesh.setMatrixAt(count++, dummy.matrix);
@@ -1301,16 +1316,16 @@ class Simulator3D {
 
     updateGrid() {
         if (!this.gridLines) return;
-        
+
         // 既存の線をクリア
-        while(this.gridLines.children.length > 0) {
+        while (this.gridLines.children.length > 0) {
             this.gridLines.remove(this.gridLines.children[0]);
         }
 
-        const material = new THREE.LineBasicMaterial({ 
-            color: 0x000000, 
-            opacity: 0.1, 
-            transparent: true 
+        const material = new THREE.LineBasicMaterial({
+            color: 0x000000,
+            opacity: 0.1,
+            transparent: true
         });
 
         const points = [];
@@ -1336,7 +1351,7 @@ class Simulator3D {
 
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
         const lines = new THREE.LineSegments(geometry, material);
-        
+
         this.gridLines.add(lines);
     }
 }
