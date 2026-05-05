@@ -28,6 +28,229 @@ const bringToFront = (panel) => {
     panel.style.zIndex = topZIndex;
 };
 
+// サウンド管理
+class AudioManager {
+    constructor() {
+        this.ctx = null;
+        this.enabled = true;
+    }
+    init() {
+        if (this.ctx) return;
+        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    playClick(freq = 800, duration = 0.05, type = 'sine') {
+        if (!this.enabled || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.1, this.ctx.currentTime + duration);
+        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + duration);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + duration);
+    }
+    playWhoosh(duration = 0.3) {
+        if (!this.enabled || !this.ctx) return;
+        const bufferSize = this.ctx.sampleRate * duration;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1000, this.ctx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + duration);
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + duration);
+        noise.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+        noise.start(); noise.stop(this.ctx.currentTime + duration);
+    }
+    playBowan(startFreq = 180, endFreq = 120, duration = 1.2) {
+        if (!this.enabled || !this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(startFreq, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(endFreq, this.ctx.currentTime + duration);
+        gain.gain.setValueAtTime(0, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.2, this.ctx.currentTime + 0.1);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + duration);
+    }
+    playGlocken3() {
+        if (!this.enabled || !this.ctx) return;
+        const freqs = [659.25, 880.00, 1318.51]; // E6, A6, E7 (高めの電子音)
+        freqs.forEach((f, i) => {
+            const time = this.ctx.currentTime + i * 0.07; // 非常に速い間隔
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'square'; // 電子音らしい矩形波
+            osc.frequency.setValueAtTime(f, time);
+            gain.gain.setValueAtTime(0, time);
+            gain.gain.linearRampToValueAtTime(0.05, time + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1); // 短い余韻
+            osc.connect(gain); gain.connect(this.ctx.destination);
+            osc.start(time); osc.stop(time + 0.1);
+        });
+    }
+    playGlocken3Off() {
+        if (!this.enabled || !this.ctx) return;
+        const freqs = [1318.51, 880.00, 659.25]; // E7, A6, E6 (下がる電子音)
+        freqs.forEach((f, i) => {
+            const time = this.ctx.currentTime + i * 0.07;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(f, time);
+            gain.gain.setValueAtTime(0, time);
+            gain.gain.linearRampToValueAtTime(0.04, time + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+            osc.connect(gain); gain.connect(this.ctx.destination);
+            osc.start(time); osc.stop(time + 0.1);
+        });
+    }
+    playChime() {
+        if (!this.enabled || !this.ctx) return;
+        const freqs = [329.63, 440.00]; // E4, A4 (Rising chime)
+        freqs.forEach((f, i) => {
+            const time = this.ctx.currentTime + i * 0.05;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(f, time);
+            gain.gain.setValueAtTime(0, time);
+            gain.gain.linearRampToValueAtTime(0.05, time + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+            osc.connect(gain); gain.connect(this.ctx.destination);
+            osc.start(time); osc.stop(time + 0.3);
+        });
+    }
+    playChimeOff() {
+        if (!this.enabled || !this.ctx) return;
+        const freqs = [440.00, 329.63]; // A4, E4 (Falling chime)
+        freqs.forEach((f, i) => {
+            const time = this.ctx.currentTime + i * 0.05;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(f, time);
+            gain.gain.setValueAtTime(0, time);
+            gain.gain.linearRampToValueAtTime(0.04, time + 0.02);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+            osc.connect(gain); gain.connect(this.ctx.destination);
+            osc.start(time); osc.stop(time + 0.3);
+        });
+    }
+    playGearChime() {
+        if (!this.enabled || !this.ctx) return;
+        const freqs = [329.63, 440.00]; // E4, A4 (メカニカルな和音)
+        freqs.forEach((f, i) => {
+            const time = this.ctx.currentTime + i * 0.05;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'square'; // 矩形波に変更
+            osc.frequency.setValueAtTime(f, time);
+            gain.gain.setValueAtTime(0, time);
+            gain.gain.linearRampToValueAtTime(0.03, time + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+            osc.connect(gain); gain.connect(this.ctx.destination);
+            osc.start(time); osc.stop(time + 0.3);
+        });
+    }
+    playPop() {
+        if (!this.enabled || !this.ctx) return;
+        const duration = 0.08;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(800, this.ctx.currentTime + duration);
+        gain.gain.setValueAtTime(0, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.1, this.ctx.currentTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + duration);
+    }
+    playPopHigh() {
+        if (!this.enabled || !this.ctx) return;
+        const duration = 0.07; // さらにキレを良く
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(500, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1000, this.ctx.currentTime + duration);
+        gain.gain.setValueAtTime(0, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.1, this.ctx.currentTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + duration);
+    }
+    playPopLow() {
+        if (!this.enabled || !this.ctx) return;
+        const duration = 0.1; // わずかに長めに
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(300, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(600, this.ctx.currentTime + duration);
+        gain.gain.setValueAtTime(0, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.1, this.ctx.currentTime + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + duration);
+    }
+    playPopPop() {
+        if (!this.enabled || !this.ctx) return;
+        [0, 0.01].forEach(delay => { // ほぼ同時（0.01秒差）に変更
+            const time = this.ctx.currentTime + delay;
+            const duration = 0.06;
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(500, time);
+            osc.frequency.exponentialRampToValueAtTime(900, time + duration);
+            gain.gain.setValueAtTime(0, time);
+            gain.gain.linearRampToValueAtTime(0.08, time + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+            osc.connect(gain); gain.connect(this.ctx.destination);
+            osc.start(time); osc.stop(time + duration);
+        });
+    }
+    playSwitchKachi() {
+        if (!this.enabled || !this.ctx) return;
+        const duration = 0.05;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle'; // 金属的な響きに近いトライアングル波
+        osc.frequency.setValueAtTime(1500, this.ctx.currentTime);
+        gain.gain.setValueAtTime(0, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.06, this.ctx.currentTime + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + duration);
+    }
+    playSwitchKachiOff() {
+        if (!this.enabled || !this.ctx) return;
+        const duration = 0.05;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(1200, this.ctx.currentTime); // 少し低めの金属音
+        gain.gain.setValueAtTime(0, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0.05, this.ctx.currentTime + 0.005);
+        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
+        osc.connect(gain); gain.connect(this.ctx.destination);
+        osc.start(); osc.stop(this.ctx.currentTime + duration);
+    }
+}
+const audio = new AudioManager();
+// ユーザーの最初のクリックでAudioContextを開始
+window.addEventListener('pointerdown', () => audio.init(), { once: true });
+
 // Component Colors for Graphs (Sync with CSS variables --bg-xxx)
 const compColors = {
     battery: '#FF8C8C',    // Coral Pink
@@ -339,8 +562,10 @@ function setupEventListeners() {
             appConfig.darkMode = e.target.checked;
             if (e.target.checked) {
                 document.documentElement.classList.remove('light-mode');
+                audio.playChime(); // ON
             } else {
                 document.documentElement.classList.add('light-mode');
+                audio.playChimeOff(); // OFF
             }
             // 3Dモデルのテクスチャを更新
             if (simulator3D.isActive && simulationResults) {
@@ -357,6 +582,9 @@ function setupEventListeners() {
         absModeCheckbox.addEventListener('change', (e) => {
             showAbsoluteValues = e.target.checked;
             document.body.classList.toggle('abs-mode-active', showAbsoluteValues);
+            // ABSボタンのみON/OFFの音を入れ替え
+            if (showAbsoluteValues) audio.playChimeOff(); // ON(ABS)で下がる音
+            else audio.playChime(); // OFF(±)で上がる音
             updateResultsTable();
             updateGraphLegend();
             updateToolbarIcons();
@@ -370,9 +598,11 @@ function setupEventListeners() {
         show3dCheckbox.addEventListener('change', (e) => {
             if (!isSimulating) return;
             if (e.target.checked) {
+                audio.playChime();
                 simulator3D.show();
                 simulator3D.update(components, simulationResults);
             } else {
+                audio.playChimeOff();
                 simulator3D.hide();
             }
         });
@@ -438,8 +668,10 @@ function setupEventListeners() {
             if (e.target.checked) {
                 panel.classList.add('show');
                 updateResultsTable();
+                audio.playChime(); 
             } else {
                 panel.classList.remove('show');
+                audio.playChimeOff();
                 document.querySelectorAll('.comp-highlight').forEach(el => el.remove());
             }
         });
@@ -452,8 +684,14 @@ function setupEventListeners() {
     });
 
     // Modal
-    document.getElementById('modal-cancel').onclick = () => paramModal.style.display = 'none';
-    paramModal.onclick = (e) => { if (e.target === paramModal) paramModal.style.display = 'none'; };
+    document.getElementById('modal-cancel').onclick = () => {
+        paramModal.style.display = 'none';
+    };
+    paramModal.onclick = (e) => { 
+        if (e.target === paramModal && paramModal.style.display !== 'none') {
+            paramModal.style.display = 'none'; 
+        }
+    };
     document.getElementById('modal-delete').onclick = () => {
         removeComponent(editingCompId);
         paramModal.style.display = 'none';
@@ -497,7 +735,6 @@ function setupEventListeners() {
         };
     }
 
-    // Graph Panel listeners
     document.getElementById('close-voltage-graph-btn').onclick = () => {
         document.getElementById('voltage-graph-panel').classList.remove('show');
         if (!document.getElementById('current-graph-panel').classList.contains('show')) selectedGraphCompIds = [];
@@ -568,10 +805,24 @@ function setupEventListeners() {
 
     if (settingsBtn && settingsPanel && settingsBackdrop) {
         settingsPanel.addEventListener('pointerdown', () => bringToFront(settingsPanel));
+
+        // サウンドスイッチの連動
+        const soundCheckbox = document.getElementById('sound-enable-checkbox');
+        if (soundCheckbox) {
+            soundCheckbox.onchange = (e) => { 
+                audio.enabled = e.target.checked; 
+                if (audio.enabled) audio.playChime();
+                else audio.playChimeOff();
+            };
+        }
+
         settingsBtn.onclick = (e) => {
             e.stopPropagation();
             const isHidden = !settingsPanel.classList.contains('show');
+            settingsPanel.classList.toggle('show', isHidden);
+            settingsBackdrop.style.display = isHidden ? 'block' : 'none';
             if (isHidden) {
+                audio.playGearChime(); // 矩形波の出現音
                 visibilityList.innerHTML = '';
                 const items = document.querySelectorAll('.tool-item[data-type]');
                 items.forEach(item => {
@@ -887,6 +1138,12 @@ function forceStopSimulation() {
 function toggleSimulation() {
     isSimulating = !isSimulating;
     
+    if (isSimulating) {
+        audio.playGlocken3(); // 鉄琴の3連音
+    } else {
+        audio.playGlocken3Off(); // 下がる3連音
+    }
+
     solveBtn.innerText = isSimulating ? '停止' : 'OK';
     solveBtn.style.backgroundColor = isSimulating ? '#a5d8ff' : '#ffb8c6';
     
@@ -1079,6 +1336,7 @@ function endDragging(e) {
                     if (comp.x !== gx || comp.y !== gy) {
                         comp.x = gx; comp.y = gy;
                         hasChanged = true;
+                        audio.playPopLow(); // 少し低いポップ音
                     }
                 }
             }
@@ -1144,26 +1402,25 @@ function addComponent(type, x, y) {
     }[type];
 
     const initialComp = { id, type, x, y, rotation: 0, value: defaultValue };
+    if (type === 'voltmeter') initialComp.range = 300;
+    else if (type === 'ammeter') initialComp.range = 5;
+    
     if (type === 'battery' || type === 'ac_source') {
         initialComp.rInt = 0.001;
     }
-    if (type === 'ac_source') {
-        initialComp.freq = 1.0;
-        initialComp.phase = 90.0;
-    }
-    if (type === 'voltmeter') {
-        initialComp.range = 300;
-    }
-    if (type === 'ammeter') {
-        initialComp.range = 5;
-    }
+    initialComp.freq = 1.0;
+    initialComp.phase = 90.0;
+    initialComp.rInt = 0.001; // default rInt for sources
+    
     components.push(initialComp);
+    audio.playPopLow(); // 少し低いポップ音
     render();
 }
 
 function removeComponent(id) {
     components = components.filter(c => c.id !== id);
     forceStopSimulation();
+    audio.playWhoosh(0.12); // 削除音を復活
     render();
 }
 
@@ -1171,6 +1428,7 @@ function rotateComponent(id) {
     const comp = components.find(c => c.id === id);
     if (comp) {
         comp.rotation = (comp.rotation + 1) % 4;
+        audio.playPop(); // 回転音を単発ポップ音に変更
         render();
     }
 }
@@ -1258,7 +1516,7 @@ function openEdit(id) {
                         vRangeDiv.style.display = isV ? 'flex' : 'none';
                         aRangeDiv.style.display = isV ? 'none' : 'flex';
                         
-                        const currentRange = comp.range || (isV ? 300 : 5);
+                        const currentRange = parseFloat(comp.range || (isV ? 300 : 5));
                         const name = isV ? 'v-range' : 'a-range';
                         const radios = document.getElementsByName(name);
                         for (const r of radios) {
@@ -1341,6 +1599,7 @@ function openEdit(id) {
         const bgType = comp.type.startsWith('wire') ? 'wire' : comp.type;
         document.querySelector('#param-modal .modal-content').style.backgroundColor = `var(--bg-${bgType}, var(--panel-bg))`;
         paramModal.style.display = 'flex';
+        audio.playPopHigh(); // 高めのポップ音
     }
 }
 
@@ -1536,6 +1795,8 @@ function render() {
             swBtn.addEventListener('pointerdown', (e) => {
                 e.stopPropagation(); // prevent panel dragging or editing
                 comp.value = comp.value === 1 ? 0 : 1;
+                if (comp.value === 1) audio.playSwitchKachi(); // ON: 高い「カチッ」
+                else audio.playSwitchKachiOff(); // OFF: 低い「カチッ」
                 if (isSimulating) {
                     activeNetlist = buildNetlist();
                 }
@@ -2941,10 +3202,8 @@ function addRotationZones(group, id) {
         rz.classList.add('rotate-zone');
         rz.addEventListener('pointerdown', (e) => {
             e.stopPropagation();
-            const c = components.find(c => c.id === id);
-            if (c) c.rotation = (c.rotation + 1) % 4;
+            rotateComponent(id);
             forceStopSimulation();
-            render();
         });
         group.appendChild(rz);
     });
@@ -3444,12 +3703,24 @@ const illCheck = document.getElementById('illustration-checkbox');
 if (illCheck) {
     illCheck.onchange = () => {
         showIllustrations = illCheck.checked;
+        if (showIllustrations) audio.playChime();
+        else audio.playChimeOff();
         updateToolbarIcons();
         render();
         if (typeof simulator3D !== 'undefined' && simulator3D.isActive) {
             simulator3D.update(components, simulationResults);
         }
     };
+}
+
+// 電荷表示のトグルにも追加
+const partCheck = document.getElementById('show-particles-checkbox');
+if (partCheck) {
+    partCheck.addEventListener('change', (e) => {
+        if (e.target.checked) audio.playChime();
+        else audio.playChimeOff();
+        render();
+    });
 }
 
 init();
