@@ -247,7 +247,7 @@ class Simulator3D {
 
                 const isHoriz = (comp.rotation === 0 || comp.rotation === 2 || (comp.type === 'wire' && (comp.rotation === 0 || comp.rotation === 2)));
                 let nodesForComp = [];
-                if (['wire_l', 'wire_t'].includes(comp.type)) {
+                if (['wire_l', 'wire_t', 'wire_cross'].includes(comp.type)) {
                     nodesForComp = [`v_${comp.x}_${comp.y}`, `v_${comp.x + 1}_${comp.y}`, `h_${comp.x}_${comp.y}`, `h_${comp.x}_${comp.y + 1}`];
                 } else if (isHoriz) {
                     nodesForComp = [`v_${comp.x}_${comp.y}`, `v_${comp.x + 1}_${comp.y}`];
@@ -301,22 +301,17 @@ class Simulator3D {
             let isHorizontal = true;
             let vStart = minV, vEnd = minV;
 
-            if (['wire_l', 'wire_t'].includes(comp.type)) {
-                isHorizontal = (comp.rotation === 0 || comp.rotation === 2);
-                if (comp.type === 'wire_l') {
-                    // L字の2端子を特定
-                    let n1, n2;
-                    if (comp.rotation === 0) { n1 = topNode; n2 = rightNode; }
-                    else if (comp.rotation === 1) { n1 = rightNode; n2 = bottomNode; }
-                    else if (comp.rotation === 2) { n1 = bottomNode; n2 = leftNode; }
-                    else { n1 = leftNode; n2 = topNode; }
-                    vStart = getV(n1); vEnd = getV(n2);
+            if (['wire_l', 'wire_t', 'wire_cross'].includes(comp.type)) {
+                // Junctions should be equipotential surfaces at their center junction point.
+                const midNode = `mid_${comp.x}_${comp.y}`;
+                const midV = simulationResults.voltages[midNode];
+                if (midV !== undefined) {
+                    vStart = vEnd = midV;
                 } else {
-                    // T字は分岐点があるが、簡易的に代表値を使用するか、より詳細に分岐を描画する。
-                    // ここでは一旦、全体の平均的な傾斜を表示するため、接続されているノードの最大・最小をとる
+                    // Fallback: use the average of defined boundary potentials
                     const activeVs = definedVolts.length > 0 ? definedVolts : [minV];
-                    vStart = Math.min(...activeVs);
-                    vEnd = Math.max(...activeVs);
+                    const avgV = activeVs.reduce((a, b) => a + b, 0) / activeVs.length;
+                    vStart = vEnd = avgV;
                 }
             } else if (comp.rotation === 0 || comp.rotation === 2 || (comp.type === 'wire' && (comp.rotation === 0 || comp.rotation === 2))) {
                 isHorizontal = true;
@@ -557,6 +552,11 @@ class Simulator3D {
             ctx.moveTo(-64, 0); ctx.lineTo(64, 0);
         } else if (comp.type === 'wire_l') {
             ctx.moveTo(0, -64); ctx.lineTo(0, 0); ctx.lineTo(64, 0);
+        } else if (comp.type === 'wire_cross') {
+            ctx.moveTo(-64, 0); ctx.lineTo(64, 0);
+            ctx.moveTo(0, -64); ctx.lineTo(0, 64);
+            ctx.stroke(); ctx.beginPath();
+            ctx.fillStyle = '#000'; ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fill();
         } else if (comp.type === 'wire_t') {
             ctx.moveTo(-64, 0); ctx.lineTo(64, 0);
             ctx.moveTo(0, 0); ctx.lineTo(0, 64);
@@ -1150,15 +1150,10 @@ class Simulator3D {
                 return minV;
             };
 
-            if (comp.type === 'wire_t') {
-                const eqV = getAnyV(); // T字は等電位
+            if (comp.type === 'wire_cross') {
+                const eqV = getAnyV(); // 十字も等電位
                 const z = (eqV - minV) * this.Z_SCALE;
-
-                let activeSides = [];
-                if (comp.rotation === 0) activeSides = ['left', 'right', 'bottom'];
-                else if (comp.rotation === 1) activeSides = ['top', 'bottom', 'left'];
-                else if (comp.rotation === 2) activeSides = ['left', 'right', 'top'];
-                else activeSides = ['top', 'bottom', 'right'];
+                const activeSides = ['left', 'right', 'top', 'bottom'];
 
                 activeSides.forEach(side => {
                     if (!comp.legProgress || comp.legProgress[side] === undefined) return;
@@ -1181,40 +1176,93 @@ class Simulator3D {
                         }
                     }
                 });
+            } else if (comp.type === 'wire_t') {
+                const midNode = `mid_${comp.x}_${comp.y}`;
+                const eqV = simulationResults.voltages[midNode] !== undefined ? simulationResults.voltages[midNode] : getAnyV();
+                const z = (eqV - minV) * this.Z_SCALE;
+                
+                const i1 = simulationResults.currents[comp.id + '_1'] || 0;
+                const i2 = simulationResults.currents[comp.id + '_2'] || 0;
+                const i3 = simulationResults.currents[comp.id + '_3'] || 0;
+                
+                const activeSides = [];
+                if (comp.rotation === 0) activeSides.push({s:'left', i:i1}, {s:'right', i:i2}, {s:'bottom', i:i3});
+                else if (comp.rotation === 1) activeSides.push({s:'top', i:i1}, {s:'bottom', i:i2}, {s:'left', i:i3});
+                else if (comp.rotation === 2) activeSides.push({s:'left', i:i1}, {s:'right', i:i2}, {s:'top', i:i3});
+                else activeSides.push({s:'top', i:i1}, {s:'bottom', i:i2}, {s:'right', i:i3});
+
+                activeSides.forEach(leg => {
+                    const side = leg.s;
+                    if (!comp.legProgress || comp.legProgress[side] === undefined) return;
+                    const num = 2;
+                    for (let p = 0; p < num; p++) {
+                        if (count >= 2000) break;
+                        const normProg = (comp.legProgress[side] + p / num) % 1;
+                        let lx = 0, ly = 0;
+                        const half = 0.5;
+                        if (side === 'left') { lx = -half + normProg * half; ly = 0; }
+                        else if (side === 'right') { lx = half - normProg * half; ly = 0; }
+                        else if (side === 'top') { lx = 0; ly = half - normProg * half; }
+                        else if (side === 'bottom') { lx = 0; ly = -half + normProg * half; }
+
+                        dummy.position.set(cx + lx * this.GRID_SCALE, cy + ly * this.GRID_SCALE, z + 2);
+                        dummy.updateMatrix();
+                        if (typeof isElectronMode !== 'undefined' && isElectronMode && this.negParticleMesh) {
+                            this.negParticleMesh.setMatrixAt(negCount++, dummy.matrix);
+                        } else {
+                            this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                        }
+                    }
+                });
             } else if (comp.type === 'wire_l') {
-                let n1, n2;
-                if (comp.rotation === 0) { n1 = topNode; n2 = rightNode; }
-                else if (comp.rotation === 1) { n1 = rightNode; n2 = bottomNode; }
-                else if (comp.rotation === 2) { n1 = bottomNode; n2 = leftNode; }
-                else { n1 = leftNode; n2 = topNode; }
-                const vStart = getV(n1);
-                const vEnd = getV(n2);
-
-                const num = 4;
-                for (let p = 0; p < num; p++) {
-                    if (count >= 2000) break;
-                    const prog = (comp.pProgress + p / num) % 1;
-                    let lx, ly;
-                    if (prog < 0.5) {
-                        lx = 0; ly = -0.5 + prog; // 2D: Top to Center
-                    } else {
-                        lx = (prog - 0.5); ly = 0; // 2D: Center to Right
-                    }
-                    // Apply rotation in 2D space then invert Y for 3D
-                    let rx = lx, ry = ly;
-                    if (comp.rotation === 1) { const tx = rx; rx = -ry; ry = tx; }
-                    else if (comp.rotation === 2) { rx = -rx; ry = -ry; }
-                    else if (comp.rotation === 3) { const tx = rx; rx = ry; ry = -tx; }
-
-                    const z = (vStart + (vEnd - vStart) * prog - minV) * this.Z_SCALE;
-                    dummy.position.set(cx + rx * this.GRID_SCALE, cy - ry * this.GRID_SCALE, z + 2);
-                    dummy.updateMatrix();
-                    if (typeof isElectronMode !== 'undefined' && isElectronMode && this.negParticleMesh) {
-                        this.negParticleMesh.setMatrixAt(negCount++, dummy.matrix);
-                    } else {
-                        this.particleMesh.setMatrixAt(count++, dummy.matrix);
-                    }
+                const midNode = `mid_${comp.x}_${comp.y}`;
+                const eqV = simulationResults.voltages[midNode] !== undefined ? simulationResults.voltages[midNode] : getAnyV();
+                const z = (eqV - minV) * this.Z_SCALE;
+                
+                let iT = 0, iR = 0, iB = 0, iL = 0;
+                if (comp.rotation === 0) {
+                    iT = simulationResults.currents[comp.id + '_T'] || 0;
+                    iR = simulationResults.currents[comp.id + '_R'] || 0;
+                } else if (comp.rotation === 1) {
+                    iR = simulationResults.currents[comp.id + '_R'] || 0;
+                    iB = simulationResults.currents[comp.id + '_B'] || 0;
+                } else if (comp.rotation === 2) {
+                    iB = simulationResults.currents[comp.id + '_B'] || 0;
+                    iL = simulationResults.currents[comp.id + '_L'] || 0;
+                } else {
+                    iL = simulationResults.currents[comp.id + '_L'] || 0;
+                    iT = simulationResults.currents[comp.id + '_T'] || 0;
                 }
+
+                const legs = [];
+                if (comp.rotation === 0) legs.push({s:'top', i:iT}, {s:'right', i:iR});
+                else if (comp.rotation === 1) legs.push({s:'right', i:iR}, {s:'bottom', i:iB});
+                else if (comp.rotation === 2) legs.push({s:'bottom', i:iB}, {s:'left', i:iL});
+                else legs.push({s:'left', i:iL}, {s:'top', i:iT});
+
+                legs.forEach(leg => {
+                    const side = leg.s;
+                    if (!comp.legProgress || comp.legProgress[side] === undefined) return;
+                    const num = 2;
+                    for (let p = 0; p < num; p++) {
+                        if (count >= 2000) break;
+                        const normProg = (comp.legProgress[side] + p / num) % 1;
+                        let lx = 0, ly = 0;
+                        const half = 0.5;
+                        if (side === 'left') { lx = -half + normProg * half; ly = 0; }
+                        else if (side === 'right') { lx = half - normProg * half; ly = 0; }
+                        else if (side === 'top') { lx = 0; ly = half - normProg * half; }
+                        else if (side === 'bottom') { lx = 0; ly = -half + normProg * half; }
+
+                        dummy.position.set(cx + lx * this.GRID_SCALE, cy + ly * this.GRID_SCALE, z + 2);
+                        dummy.updateMatrix();
+                        if (typeof isElectronMode !== 'undefined' && isElectronMode && this.negParticleMesh) {
+                            this.negParticleMesh.setMatrixAt(negCount++, dummy.matrix);
+                        } else {
+                            this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                        }
+                    }
+                });
             } else if (comp.type === 'capacitor') {
                 let v1, v2;
                 if (comp.rotation === 0) { v1 = getV(leftNode); v2 = getV(rightNode); }

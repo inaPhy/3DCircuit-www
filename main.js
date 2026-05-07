@@ -11,6 +11,8 @@ let SVG_HEIGHT = GRID_SIZE_Y * CELL_SIZE;
 let components = []; // { id, type, x, y, rotation, value }
 let simulationResults = null;
 let editingCompId = null;
+let editingCompType = null;
+let editingCompRotation = 0;
 let selectedGraphCompIds = []; // Up to 4 components
 let globalGraphHistory = []; // [{ voltages: {id: v, ...}, currents: {id: i, ...} }, ...]
 const maxGraphHistory = 400;
@@ -21,6 +23,8 @@ let graphRangeI = 1.00;
 let showAbsoluteValues = true; // Default to ON as requested
 let showIllustrations = false; // ver2.02: イラスト表示モードのフラグ
 let isElectronMode = false; // 電子モード（負電荷）のフラグ
+let modalLastOpened = 0; // モーダルが開かれた時刻を記録
+
 
 // パネルの重なり順管理
 let topZIndex = 2000;
@@ -639,6 +643,22 @@ function setupEventListeners() {
         });
     }
 
+    // Wire Type Selector
+    document.querySelectorAll('.wire-type-option').forEach(opt => {
+        opt.addEventListener('click', () => {
+            editingCompType = opt.dataset.type;
+            editingCompRotation = parseInt(opt.dataset.rotation || 0);
+            document.querySelectorAll('.wire-type-option').forEach(o => {
+                const isMatch = (o === opt);
+                o.style.borderColor = isMatch ? 'var(--accent-primary)' : 'transparent';
+                o.style.backgroundColor = isMatch ? 'rgba(255,255,255,0.1)' : 'transparent';
+                o.style.boxShadow = isMatch ? '0 0 10px var(--accent-primary)' : 'none';
+            });
+            document.getElementById('modal-title').innerText = `${getLabel(editingCompType)} の設定`;
+            audio.playClick();
+        });
+    });
+
     const compValueInput = document.getElementById('comp-value');
     const compValueSlider = document.getElementById('comp-value-slider');
     if (compValueInput && compValueSlider) {
@@ -719,6 +739,7 @@ function setupEventListeners() {
         paramModal.style.display = 'none';
     };
     paramModal.onclick = (e) => { 
+        if (Date.now() - modalLastOpened < 500) return; // タッチ/ダブルタップ時の誤動作防止
         if (e.target === paramModal && paramModal.style.display !== 'none') {
             paramModal.style.display = 'none'; 
         }
@@ -1089,7 +1110,7 @@ function setupEventListeners() {
         
         const comp = components.find(c => c.x === gx && c.y === gy);
         if (comp) {
-            openParamModal(comp.id);
+            openEdit(comp.id);
         }
     });
 }
@@ -1478,6 +1499,7 @@ function addComponent(type, x, y) {
         wire: 0,
         wire_l: 0,
         wire_t: 0,
+        wire_cross: 0,
         switch: 0,
         voltmeter: 1e7,
         ammeter: 1e-3
@@ -1516,6 +1538,7 @@ function rotateComponent(id) {
 }
 
 function openEdit(id) {
+    modalLastOpened = Date.now();
     const comp = components.find(c => c.id === id);
     if (comp) {
         editingCompId = id;
@@ -1526,7 +1549,7 @@ function openEdit(id) {
             'input-group-number', 'input-group-switch', 'input-group-extra', 
             'bulb-presets-container', 'meter-range-container', 'meter-details-content', 
             'bulb-details-content', 'modal-ac-toggle', 'modal-bulb-details-toggle', 
-            'modal-meter-details-toggle'
+            'modal-meter-details-toggle', 'input-group-wire-type'
         ];
         const extraPanel = document.getElementById('input-group-extra');
         groups.forEach(gid => {
@@ -1545,8 +1568,28 @@ function openEdit(id) {
             document.getElementById('comp-switch-val').value = comp.value;
             if (saveBtn) saveBtn.style.display = 'block';
         } else if (comp.type.startsWith('wire')) {
-            // 導線の場合は何も表示しない（削除ボタンのみ有効）
-            if (saveBtn) saveBtn.style.display = 'none';
+            editingCompType = comp.type;
+            editingCompRotation = comp.rotation || 0;
+            
+            // ハイライト表示用に回転角を正規化（0=0, 1=90, 2=180, 3=270）
+            let displayRotation = editingCompRotation;
+            if (comp.type === 'wire') {
+                displayRotation = editingCompRotation % 2; // 180->0, 270->90
+            } else if (comp.type === 'wire_cross') {
+                displayRotation = 0; // 十字は常に0
+            }
+
+            const wireTypeGroup = document.getElementById('input-group-wire-type');
+            if (wireTypeGroup) {
+                wireTypeGroup.style.display = 'block';
+                document.querySelectorAll('.wire-type-option').forEach(opt => {
+                    const isMatch = (opt.dataset.type === comp.type && parseInt(opt.dataset.rotation) === displayRotation);
+                    opt.style.borderColor = isMatch ? 'var(--accent-primary)' : 'transparent';
+                    opt.style.backgroundColor = isMatch ? 'rgba(255,255,255,0.1)' : 'transparent';
+                    opt.style.boxShadow = isMatch ? '0 0 10px var(--accent-primary)' : 'none';
+                });
+            }
+            if (saveBtn) saveBtn.style.display = 'block';
         } else {
             document.getElementById('input-group-number').style.display = 'block';
             document.getElementById('comp-value').value = comp.value;
@@ -1690,6 +1733,10 @@ function saveParams() {
     if (comp) {
         if (comp.type === 'switch') {
             comp.value = parseInt(document.getElementById('comp-switch-val').value);
+        } else if (comp.type.startsWith('wire')) {
+            comp.type = editingCompType;
+            comp.rotation = editingCompRotation;
+            comp.value = 0; // Wires have 0 value
         } else if (comp.type === 'voltmeter') {
             const radios = document.getElementsByName('v-range');
             for (const r of radios) {
@@ -1722,7 +1769,7 @@ function saveParams() {
 }
 
 function getLabel(type) {
-    return { battery: '電池', ac_source: '交流電源', resistor: '抵抗', bulb: '電球', capacitor: 'コンデンサー', inductor: 'コイル', wire: '導線ー', wire_l: '導線L', wire_t: '導線T', switch: 'スイッチ', voltmeter: '電圧計', ammeter: '電流計' }[type];
+    return { battery: '電池', ac_source: '交流電源', resistor: '抵抗', bulb: '電球', capacitor: 'コンデンサー', inductor: 'コイル', wire: '導線ー', wire_l: '導線L', wire_t: '導線T', wire_cross: '導線＋', switch: 'スイッチ', voltmeter: '電圧計', ammeter: '電流計' }[type];
 }
 
 function getShortLabel(type) {
@@ -1949,16 +1996,12 @@ function startAnimation() {
         
         // Particles move continuously by integrating speed
         components.forEach(comp => {
-            if (comp.type === 'wire_t') {
+            if (comp.type === 'wire_cross') {
                 if (!comp.legProgress) comp.legProgress = { left:0, right:0, top:0, bottom:0 };
-                const I_12 = simulationResults ? (simulationResults.currents[comp.id + '_1'] || 0) : 0;
-                const I_23 = simulationResults ? (simulationResults.currents[comp.id + '_2'] || 0) : 0;
-                
-                let iLeft = 0, iRight = 0, iTop = 0, iBottom = 0;
-                if (comp.rotation === 0) { iLeft = I_12; iRight = I_23 - I_12; iBottom = -I_23; }
-                else if (comp.rotation === 1) { iTop = I_12; iBottom = I_23 - I_12; iLeft = -I_23; }
-                else if (comp.rotation === 2) { iLeft = I_12; iRight = I_23 - I_12; iTop = -I_23; }
-                else { iTop = I_12; iBottom = I_23 - I_12; iRight = -I_23; }
+                const iLeft = simulationResults ? (simulationResults.currents[comp.id + '_L'] || 0) : 0;
+                const iRight = simulationResults ? (simulationResults.currents[comp.id + '_R'] || 0) : 0;
+                const iTop = simulationResults ? (simulationResults.currents[comp.id + '_T'] || 0) : 0;
+                const iBottom = simulationResults ? (simulationResults.currents[comp.id + '_B'] || 0) : 0;
 
                 const updateLeg = (speed, side) => {
                     const actualSpeed = isElectronMode ? -speed : speed;
@@ -1971,6 +2014,50 @@ function startAnimation() {
                 updateLeg(iRight * 30, 'right');
                 updateLeg(iTop * 30, 'top');
                 updateLeg(iBottom * 30, 'bottom');
+            } else if (comp.type === 'wire_t') {
+                if (!comp.legProgress) comp.legProgress = { left:0, right:0, top:0, bottom:0 };
+                const i1 = simulationResults ? (simulationResults.currents[comp.id + '_1'] || 0) : 0;
+                const i2 = simulationResults ? (simulationResults.currents[comp.id + '_2'] || 0) : 0;
+                const i3 = simulationResults ? (simulationResults.currents[comp.id + '_3'] || 0) : 0;
+                
+                let iLeft = 0, iRight = 0, iTop = 0, iBottom = 0;
+                if (comp.rotation === 0) { iLeft = i1; iRight = i2; iBottom = i3; }
+                else if (comp.rotation === 1) { iTop = i1; iBottom = i2; iLeft = i3; }
+                else if (comp.rotation === 2) { iLeft = i1; iRight = i2; iTop = i3; }
+                else { iTop = i1; iBottom = i2; iRight = i3; }
+
+                const updateLeg = (speed, side) => {
+                    const actualSpeed = isElectronMode ? -speed : speed;
+                    comp.legProgress[side] += actualSpeed * dt;
+                    if (comp.legProgress[side] >= 1) comp.legProgress[side] %= 1;
+                    if (comp.legProgress[side] < 0) comp.legProgress[side] = 1 - (Math.abs(comp.legProgress[side]) % 1);
+                };
+
+                updateLeg(iLeft * 30, 'left');
+                updateLeg(iRight * 30, 'right');
+                updateLeg(iTop * 30, 'top');
+                updateLeg(iBottom * 30, 'bottom');
+            } else if (comp.type === 'wire_l') {
+                if (!comp.legProgress) comp.legProgress = { left:0, right:0, top:0, bottom:0 };
+                const updateLeg = (speed, side) => {
+                    const actualSpeed = isElectronMode ? -speed : speed;
+                    comp.legProgress[side] += actualSpeed * dt;
+                    if (comp.legProgress[side] >= 1) comp.legProgress[side] %= 1;
+                    if (comp.legProgress[side] < 0) comp.legProgress[side] = 1 - (Math.abs(comp.legProgress[side]) % 1);
+                };
+                if (comp.rotation === 0) {
+                    updateLeg((simulationResults.currents[comp.id + '_T'] || 0) * 30, 'top');
+                    updateLeg((simulationResults.currents[comp.id + '_R'] || 0) * 30, 'right');
+                } else if (comp.rotation === 1) {
+                    updateLeg((simulationResults.currents[comp.id + '_R'] || 0) * 30, 'right');
+                    updateLeg((simulationResults.currents[comp.id + '_B'] || 0) * 30, 'bottom');
+                } else if (comp.rotation === 2) {
+                    updateLeg((simulationResults.currents[comp.id + '_B'] || 0) * 30, 'bottom');
+                    updateLeg((simulationResults.currents[comp.id + '_L'] || 0) * 30, 'left');
+                } else {
+                    updateLeg((simulationResults.currents[comp.id + '_L'] || 0) * 30, 'left');
+                    updateLeg((simulationResults.currents[comp.id + '_T'] || 0) * 30, 'top');
+                }
             } else {
                 let i = simulationResults ? (simulationResults.currents[comp.id] || 0) : 0;
                 if (!comp.hasOwnProperty('pProgress')) comp.pProgress = 0;
@@ -2314,31 +2401,20 @@ function renderParticles() {
     if (showParticlesCheckbox && !showParticlesCheckbox.checked) return;
 
     components.forEach(comp => {
-        if (comp.type === 'wire_t') {
-            const I_12 = simulationResults.currents[comp.id + '_1'] || 0;
-            const I_23 = simulationResults.currents[comp.id + '_2'] || 0;
-            
-            const I_n1 = I_12;
-            const I_n2 = I_23 - I_12;
-            const I_n3 = -I_23;
-            
-            let iLeft = 0, iRight = 0, iTop = 0, iBottom = 0;
-            if (comp.rotation === 0) { iLeft = I_n1; iRight = I_n2; iBottom = I_n3; }
-            else if (comp.rotation === 1) { iTop = I_n1; iBottom = I_n2; iLeft = I_n3; }
-            else if (comp.rotation === 2) { iLeft = I_n1; iRight = I_n2; iTop = I_n3; }
-            else { iTop = I_n1; iBottom = I_n2; iRight = I_n3; }
+        if (comp.type === 'wire_cross') {
+            const iLeft = simulationResults.currents[comp.id + '_L'] || 0;
+            const iRight = simulationResults.currents[comp.id + '_R'] || 0;
+            const iTop = simulationResults.currents[comp.id + '_T'] || 0;
+            const iBottom = simulationResults.currents[comp.id + '_B'] || 0;
             
             const drawLeg = (i, side) => {
-                // if (Math.abs(i) < 1e-6) return; // コメントアウトまたは削除
-                // Use a fixed particle count for T-wire legs to avoid teleportation
                 const numParticles = 2; 
                 for (let p = 0; p < numParticles; p++) {
                     const normProg = (comp.legProgress[side] + p / numParticles) % 1;
-                    
                     const r = Math.max(1.5, CELL_SIZE * 0.045);
                     const half = CELL_SIZE / 2;
-                    
                     let lx = 0, ly = 0;
+                    
                     if (side === 'left') { lx = -half + normProg * half; }
                     else if (side === 'right') { lx = half - normProg * half; }
                     else if (side === 'top') { ly = -half + normProg * half; }
@@ -2358,14 +2434,74 @@ function renderParticles() {
                     layer.appendChild(circle);
                 }
             };
+            drawLeg(iLeft, 'left');
+            drawLeg(iRight, 'right');
+            drawLeg(iTop, 'top');
+            drawLeg(iBottom, 'bottom');
+            return;
+        } else if (comp.type === 'wire_t') {
+            const i1 = simulationResults.currents[comp.id + '_1'] || 0;
+            const i2 = simulationResults.currents[comp.id + '_2'] || 0;
+            const i3 = simulationResults.currents[comp.id + '_3'] || 0;
             
-            if (comp.rotation === 0 || comp.rotation === 2) {
-                drawLeg(iLeft, 'left'); drawLeg(iRight, 'right');
-                if (comp.rotation === 0) drawLeg(iBottom, 'bottom'); else drawLeg(iTop, 'top');
-            } else {
-                drawLeg(iTop, 'top'); drawLeg(iBottom, 'bottom');
-                if (comp.rotation === 1) drawLeg(iLeft, 'left'); else drawLeg(iRight, 'right');
-            }
+            const drawLeg = (i, side) => {
+                const numParticles = 2; 
+                for (let p = 0; p < numParticles; p++) {
+                    const normProg = (comp.legProgress[side] + p / numParticles) % 1;
+                    const r = Math.max(1.5, CELL_SIZE * 0.045);
+                    const half = CELL_SIZE / 2;
+                    let lx = 0, ly = 0;
+                    if (side === 'left') { lx = -half + normProg * half; }
+                    else if (side === 'right') { lx = half - normProg * half; }
+                    else if (side === 'top') { ly = -half + normProg * half; }
+                    else if (side === 'bottom') { ly = half - normProg * half; }
+                    const cx = comp.x * CELL_SIZE + half;
+                    const cy = comp.y * CELL_SIZE + half;
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.setAttribute('cx', cx + lx);
+                    circle.setAttribute('cy', cy + ly);
+                    circle.setAttribute('r', r);
+                    const color = isElectronMode ? '#5c5cff' : '#ff1493';
+                    circle.setAttribute('fill', color);
+                    circle.setAttribute('opacity', '1');
+                    circle.setAttribute('filter', `drop-shadow(0 0 ${r}px ${color})`);
+                    layer.appendChild(circle);
+                }
+            };
+            if (comp.rotation === 0) { drawLeg(i1, 'left'); drawLeg(i2, 'right'); drawLeg(i3, 'bottom'); }
+            else if (comp.rotation === 1) { drawLeg(i1, 'top'); drawLeg(i2, 'bottom'); drawLeg(i3, 'left'); }
+            else if (comp.rotation === 2) { drawLeg(i1, 'left'); drawLeg(i2, 'right'); drawLeg(i3, 'top'); }
+            else { drawLeg(i1, 'top'); drawLeg(i2, 'bottom'); drawLeg(i3, 'right'); }
+            return;
+        } else if (comp.type === 'wire_l') {
+            const drawLeg = (side) => {
+                const numParticles = 2; 
+                for (let p = 0; p < numParticles; p++) {
+                    const normProg = (comp.legProgress[side] + p / numParticles) % 1;
+                    const r = Math.max(1.5, CELL_SIZE * 0.045);
+                    const half = CELL_SIZE / 2;
+                    let lx = 0, ly = 0;
+                    if (side === 'left') { lx = -half + normProg * half; }
+                    else if (side === 'right') { lx = half - normProg * half; }
+                    else if (side === 'top') { ly = -half + normProg * half; }
+                    else if (side === 'bottom') { ly = half - normProg * half; }
+                    const cx = comp.x * CELL_SIZE + half;
+                    const cy = comp.y * CELL_SIZE + half;
+                    const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                    circle.setAttribute('cx', cx + lx);
+                    circle.setAttribute('cy', cy + ly);
+                    circle.setAttribute('r', r);
+                    const color = isElectronMode ? '#5c5cff' : '#ff1493';
+                    circle.setAttribute('fill', color);
+                    circle.setAttribute('opacity', '1');
+                    circle.setAttribute('filter', `drop-shadow(0 0 ${r}px ${color})`);
+                    layer.appendChild(circle);
+                }
+            };
+            if (comp.rotation === 0) { drawLeg('top'); drawLeg('right'); }
+            else if (comp.rotation === 1) { drawLeg('right'); drawLeg('bottom'); }
+            else if (comp.rotation === 2) { drawLeg('bottom'); drawLeg('left'); }
+            else { drawLeg('left'); drawLeg('top'); }
             return;
         }
 
@@ -2803,10 +2939,17 @@ function drawComponentVisual(comp) {
             path.setAttribute('d', 'M 0,-30 L 0,0 L 30,0');
             g.appendChild(path);
             break;
+        case 'wire_cross':
+            path.setAttribute('d', 'M -30,0 L 30,0 M 0,-30 L 0,30');
+            const crossDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            crossDot.setAttribute('cx', 0); crossDot.setAttribute('cy', 0); crossDot.setAttribute('r', 3.5); crossDot.setAttribute('fill', color);
+            g.appendChild(path);
+            g.appendChild(crossDot);
+            break;
         case 'wire_t':
             path.setAttribute('d', 'M -30,0 L 30,0 M 0,0 L 0,30');
             const tDot = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            tDot.setAttribute('cx', 0); tDot.setAttribute('cy', 0); tDot.setAttribute('r', 2); tDot.setAttribute('fill', color);
+            tDot.setAttribute('cx', 0); tDot.setAttribute('cy', 0); tDot.setAttribute('r', 3.5); tDot.setAttribute('fill', color);
             g.appendChild(path);
             g.appendChild(tDot);
             break;
@@ -3335,20 +3478,36 @@ function buildNetlist() {
         const bottom = `h_${c.x}_${c.y + 1}`;
 
         if (c.type === 'wire_l') {
-            let n1, n2;
-            if (c.rotation === 0) { n1 = top; n2 = right; }
-            else if (c.rotation === 1) { n1 = right; n2 = bottom; }
-            else if (c.rotation === 2) { n1 = bottom; n2 = left; }
-            else { n1 = left; n2 = top; }
-            netlist.push({ id: c.id, type: 'wire', nodes: [n1, n2], value: 0 });
+            const mid = `mid_${c.x}_${c.y}`;
+            if (c.rotation === 0) {
+                netlist.push({ id: c.id + '_T', type: 'wire', nodes: [top, mid], value: 0 });
+                netlist.push({ id: c.id + '_R', type: 'wire', nodes: [right, mid], value: 0 });
+            } else if (c.rotation === 1) {
+                netlist.push({ id: c.id + '_R', type: 'wire', nodes: [right, mid], value: 0 });
+                netlist.push({ id: c.id + '_B', type: 'wire', nodes: [bottom, mid], value: 0 });
+            } else if (c.rotation === 2) {
+                netlist.push({ id: c.id + '_B', type: 'wire', nodes: [bottom, mid], value: 0 });
+                netlist.push({ id: c.id + '_L', type: 'wire', nodes: [left, mid], value: 0 });
+            } else {
+                netlist.push({ id: c.id + '_L', type: 'wire', nodes: [left, mid], value: 0 });
+                netlist.push({ id: c.id + '_T', type: 'wire', nodes: [top, mid], value: 0 });
+            }
+        } else if (c.type === 'wire_cross') {
+            const mid = `mid_${c.x}_${c.y}`;
+            netlist.push({ id: c.id + '_L', type: 'wire', nodes: [left, mid], value: 0 });
+            netlist.push({ id: c.id + '_R', type: 'wire', nodes: [right, mid], value: 0 });
+            netlist.push({ id: c.id + '_T', type: 'wire', nodes: [top, mid], value: 0 });
+            netlist.push({ id: c.id + '_B', type: 'wire', nodes: [bottom, mid], value: 0 });
         } else if (c.type === 'wire_t') {
+            const mid = `mid_${c.x}_${c.y}`;
             let n1, n2, n3;
             if (c.rotation === 0) { n1 = left; n2 = right; n3 = bottom; }
             else if (c.rotation === 1) { n1 = top; n2 = bottom; n3 = left; }
             else if (c.rotation === 2) { n1 = left; n2 = right; n3 = top; }
             else { n1 = top; n2 = bottom; n3 = right; }
-            netlist.push({ id: c.id + '_1', type: 'wire', nodes: [n1, n2], value: 0 });
-            netlist.push({ id: c.id + '_2', type: 'wire', nodes: [n2, n3], value: 0 });
+            netlist.push({ id: c.id + '_1', type: 'wire', nodes: [n1, mid], value: 0 });
+            netlist.push({ id: c.id + '_2', type: 'wire', nodes: [n2, mid], value: 0 });
+            netlist.push({ id: c.id + '_3', type: 'wire', nodes: [n3, mid], value: 0 });
         } else if (c.type === 'switch') {
             if (c.value === 1) {
                 let n1, n2;
@@ -3399,7 +3558,19 @@ function showTooltip(e, comp) {
     tooltip.style.left = (e.clientX + 15) + 'px';
     tooltip.style.top = (e.clientY + 15) + 'px';
 
-    if (comp.type === 'wire_t') {
+    if (comp.type === 'wire_cross') {
+        const iLeft = simulationResults.currents[comp.id + '_L'] || 0;
+        const iRight = simulationResults.currents[comp.id + '_R'] || 0;
+        const iTop = simulationResults.currents[comp.id + '_T'] || 0;
+        const iBottom = simulationResults.currents[comp.id + '_B'] || 0;
+        tooltip.innerHTML = `
+            <strong>十字導線</strong><br>
+            上: ${Math.abs(iTop).toFixed(3)}A<br>
+            下: ${Math.abs(iBottom).toFixed(3)}A<br>
+            左: ${Math.abs(iLeft).toFixed(3)}A<br>
+            右: ${Math.abs(iRight).toFixed(3)}A
+        `;
+    } else if (comp.type === 'wire_t') {
         const I_12 = simulationResults.currents[comp.id + '_1'] || 0;
         const I_23 = simulationResults.currents[comp.id + '_2'] || 0;
         let iLeft = 0, iRight = 0, iTop = 0, iBottom = 0;

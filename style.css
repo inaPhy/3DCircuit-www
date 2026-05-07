@@ -408,7 +408,7 @@ body {
     border-radius: 16px;
     border: 1px solid var(--glass-border);
     width: 90%;
-    max-width: 350px;
+    max-width: 380px;
 }
 
 .modal-btns {
