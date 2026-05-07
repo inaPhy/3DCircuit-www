@@ -20,6 +20,7 @@ let graphRangeV = 10.0;
 let graphRangeI = 1.00;
 let showAbsoluteValues = true; // Default to ON as requested
 let showIllustrations = false; // ver2.02: イラスト表示モードのフラグ
+let isElectronMode = false; // 電子モード（負電荷）のフラグ
 
 // パネルの重なり順管理
 let topZIndex = 2000;
@@ -35,8 +36,12 @@ class AudioManager {
         this.enabled = true;
     }
     init() {
-        if (this.ctx) return;
-        this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (!this.ctx) {
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        if (this.ctx.state === 'suspended') {
+            this.ctx.resume();
+        }
     }
     playClick(freq = 800, duration = 0.05, type = 'sine') {
         if (!this.enabled || !this.ctx) return;
@@ -64,6 +69,25 @@ class AudioManager {
         filter.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + duration);
         const gain = this.ctx.createGain();
         gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + duration);
+        noise.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+        noise.start(); noise.stop(this.ctx.currentTime + duration);
+    }
+    playTrashAll() {
+        if (!this.enabled || !this.ctx) return;
+        const duration = 0.6; 
+        const bufferSize = this.ctx.sampleRate * duration;
+        const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+        const noise = this.ctx.createBufferSource();
+        noise.buffer = buffer;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1200, this.ctx.currentTime);
+        filter.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + duration);
+        const gain = this.ctx.createGain();
+        gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
         gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + duration);
         noise.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
         noise.start(); noise.stop(this.ctx.currentTime + duration);
@@ -248,8 +272,8 @@ class AudioManager {
     }
 }
 const audio = new AudioManager();
-// ユーザーの最初のクリックでAudioContextを開始
-window.addEventListener('pointerdown', () => audio.init(), { once: true });
+// ユーザーのクリック（タップ）のたびにAudioContextの状態を確認・再開（iOS対策）
+window.addEventListener('pointerdown', () => audio.init());
 
 // Component Colors for Graphs (Sync with CSS variables --bg-xxx)
 const compColors = {
@@ -375,6 +399,7 @@ async function loadSettings() {
             if (key === 'darkMode') appConfig.darkMode = (value === 'true');
             if (key === 'showAbsoluteValues') appConfig.showAbsoluteValues = (value === 'true');
             if (key === 'showIllustrations' || key === 'illustMode') appConfig.showIllustrations = (value === 'true');
+            if (key === 'electronmode') appConfig.electronMode = (value === 'true');
             if (key === 'bulb_glow_k') appConfig.bulbGlowK = parseFloat(value) || 30;
             if (key === 'bulb_glow_min_r') appConfig.bulbGlowMinR = parseFloat(value) || 5;
             if (key === 'bulb_glow_max_r') appConfig.bulbGlowMaxR = parseFloat(value) || 60;
@@ -423,6 +448,12 @@ function applySettings() {
         illCheck.checked = appConfig.showIllustrations;
         showIllustrations = appConfig.showIllustrations;
         updateToolbarIcons();
+    }
+
+    const electronCheck = document.getElementById('electron-mode-checkbox');
+    if (electronCheck && appConfig.hasOwnProperty('electronMode')) {
+        electronCheck.checked = appConfig.electronMode;
+        isElectronMode = appConfig.electronMode;
     }
 
     // Apply Toolbar Visibility from settings.ini
@@ -816,6 +847,15 @@ function setupEventListeners() {
             };
         }
 
+        const electronModeCheckbox = document.getElementById('electron-mode-checkbox');
+        if (electronModeCheckbox) {
+            electronModeCheckbox.onchange = (e) => {
+                isElectronMode = e.target.checked;
+                if (isElectronMode) audio.playChime();
+                else audio.playChimeOff();
+            };
+        }
+
         settingsBtn.onclick = (e) => {
             e.stopPropagation();
             const isHidden = !settingsPanel.classList.contains('show');
@@ -896,7 +936,7 @@ function setupEventListeners() {
     // --- File Operations ---
     const saveBtn = document.getElementById('save-btn');
     if (saveBtn) {
-        saveBtn.addEventListener('click', () => {
+        saveBtn.addEventListener('click', async () => {
             const toolbarVisibility = {};
             document.querySelectorAll('.tool-item').forEach(item => {
                 toolbarVisibility[item.dataset.type] = item.style.display !== 'none';
@@ -911,12 +951,44 @@ function setupEventListeners() {
                     show3d: document.getElementById('show-3d-checkbox').checked,
                     showParticles: document.getElementById('show-particles-checkbox').checked,
                     showResults: document.getElementById('results-toggle-checkbox').checked,
+                    isElectronMode: document.getElementById('electron-mode-checkbox') ? document.getElementById('electron-mode-checkbox').checked : false,
                     timeScale: parseFloat(document.getElementById('time-scale-slider').value),
                     showIllustrations: document.getElementById('illustration-checkbox').checked,
                     toolbarVisibility: toolbarVisibility
                 }
             };
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const json = JSON.stringify(data, null, 2);
+
+            // File System Access API が使える場合（PC版Chrome/Edgeなど）
+            if ('showSaveFilePicker' in window) {
+                try {
+                    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_');
+                    const handle = await window.showSaveFilePicker({
+                        suggestedName: `circuit_${timestamp}.json`,
+                        startIn: 'downloads',
+                        types: [{
+                            description: 'JSON Circuit File',
+                            accept: {'application/json': ['.json']},
+                        }],
+                    });
+                    const writable = await handle.createWritable();
+                    await writable.write(json);
+                    await writable.close();
+                    if (messageArea) {
+                        messageArea.innerText = "保存しました";
+                        messageArea.style.color = "var(--accent-primary)";
+                        setTimeout(() => { if (messageArea.innerText === "保存しました") messageArea.innerText = ""; }, 2000);
+                    }
+                    return;
+                } catch (err) {
+                    if (err.name === 'AbortError') return;
+                    console.error("SavePicker Error:", err);
+                    // エラー時やキャンセル時は従来の方法へフォールバック
+                }
+            }
+
+            // 従来の方法（フォールバック）: 自動ダウンロード
+            const blob = new Blob([json], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             const timestamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '_');
@@ -957,6 +1029,10 @@ function setupEventListeners() {
                         applyToggle('show-particles-checkbox', data.settings.showParticles);
                         applyToggle('results-toggle-checkbox', data.settings.showResults);
                         applyToggle('illustration-checkbox', data.settings.showIllustrations);
+                        
+                        if (data.settings.isElectronMode !== undefined) {
+                            applyToggle('electron-mode-checkbox', data.settings.isElectronMode);
+                        }
                         
                         if (data.settings.timeScale !== undefined) {
                             const slider = document.getElementById('time-scale-slider');
@@ -1160,6 +1236,12 @@ function toggleSimulation() {
     renderGridBackground();
 
     if (isSimulating) {
+        components.forEach(comp => {
+            comp.pProgress = 0;
+            if (comp.legProgress) {
+                comp.legProgress = { left: 0, right: 0, top: 0, bottom: 0 };
+            }
+        });
         simulator.reset();
         activeNetlist = buildNetlist();
         const res = simulator.solve(activeNetlist, 1e-6);
@@ -1821,10 +1903,24 @@ let animTime = 0;
 let simLastTime = 0;
 let timeScale = 0.1;
 
-document.getElementById('time-scale-slider').addEventListener('input', (e) => {
-    timeScale = parseFloat(e.target.value);
-    document.getElementById('time-scale-val').innerText = timeScale.toFixed(3) + 'x';
-});
+const timeScaleSlider = document.getElementById('time-scale-slider');
+const timeScaleVal = document.getElementById('time-scale-val');
+
+function updateTimeScaleDisplay() {
+    const val = parseFloat(timeScaleSlider.value);
+    timeScale = val;
+    if (timeScaleVal) {
+        timeScaleVal.innerText = val.toFixed(2) + 'x';
+        const min = parseFloat(timeScaleSlider.min);
+        const max = parseFloat(timeScaleSlider.max);
+        const percent = (val - min) / (max - min);
+        // つまみの幅(34px)の半分(17px)を基準に、可動範囲内で計算
+        timeScaleVal.style.left = `calc(17px + ${percent} * (100% - 34px))`;
+    }
+}
+
+timeScaleSlider.addEventListener('input', updateTimeScaleDisplay);
+updateTimeScaleDisplay();
 
 function startAnimation() {
     if (animId) return;
@@ -1865,20 +1961,22 @@ function startAnimation() {
                 else { iTop = I_12; iBottom = I_23 - I_12; iRight = -I_23; }
 
                 const updateLeg = (speed, side) => {
-                    comp.legProgress[side] += speed * dt;
+                    const actualSpeed = isElectronMode ? -speed : speed;
+                    comp.legProgress[side] += actualSpeed * dt;
                     if (comp.legProgress[side] >= 1) comp.legProgress[side] %= 1;
                     if (comp.legProgress[side] < 0) comp.legProgress[side] = 1 - (Math.abs(comp.legProgress[side]) % 1);
                 };
 
-                updateLeg(iLeft * 15, 'left');
-                updateLeg(iRight * 15, 'right');
-                updateLeg(iTop * 15, 'top');
-                updateLeg(iBottom * 15, 'bottom');
+                updateLeg(iLeft * 30, 'left');
+                updateLeg(iRight * 30, 'right');
+                updateLeg(iTop * 30, 'top');
+                updateLeg(iBottom * 30, 'bottom');
             } else {
                 let i = simulationResults ? (simulationResults.currents[comp.id] || 0) : 0;
                 if (!comp.hasOwnProperty('pProgress')) comp.pProgress = 0;
                 const speed = i * 15;
-                comp.pProgress += (speed * dt); // Include timeScale naturally via dt
+                const actualSpeed = isElectronMode ? -speed : speed;
+                comp.pProgress += (actualSpeed * dt); // Include timeScale naturally via dt
                 
                 if (comp.pProgress >= 1) comp.pProgress %= 1;
                 if (comp.pProgress < 0) comp.pProgress = 1 - (Math.abs(comp.pProgress) % 1);
@@ -2237,7 +2335,7 @@ function renderParticles() {
                 for (let p = 0; p < numParticles; p++) {
                     const normProg = (comp.legProgress[side] + p / numParticles) % 1;
                     
-                    const r = Math.max(1.2, CELL_SIZE * 0.035);
+                    const r = Math.max(1.5, CELL_SIZE * 0.045);
                     const half = CELL_SIZE / 2;
                     
                     let lx = 0, ly = 0;
@@ -2253,8 +2351,10 @@ function renderParticles() {
                     circle.setAttribute('cx', cx + lx);
                     circle.setAttribute('cy', cy + ly);
                     circle.setAttribute('r', r);
-                    circle.setAttribute('fill', '#fcc419');
-                    circle.setAttribute('filter', `drop-shadow(0 0 ${r}px #fcc419)`);
+                    const color = isElectronMode ? '#5c5cff' : '#ff1493';
+                    circle.setAttribute('fill', color);
+                    circle.setAttribute('opacity', '1');
+                    circle.setAttribute('filter', `drop-shadow(0 0 ${r}px ${color})`);
                     layer.appendChild(circle);
                 }
             };
@@ -2287,26 +2387,28 @@ function renderParticles() {
             }
             const plateDiff = vPlateNeg3 - vPlatePos3;
 
-            const r = Math.max(1.2, CELL_SIZE * 0.035);
+            const r = Math.max(1.5, CELL_SIZE * 0.045);
             const half = CELL_SIZE / 2;
             const cx = comp.x * CELL_SIZE + half;
             const cy = comp.y * CELL_SIZE + half;
             
-            const drawCapParticle = (lx, ly) => {
+            const drawCapParticle = (lx, ly, color = '#ff1493', opacity = 1) => {
                 const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 circle.setAttribute('cx', cx + lx);
                 circle.setAttribute('cy', cy + ly);
                 circle.setAttribute('r', r);
-                circle.setAttribute('fill', '#fcc419');
-                circle.setAttribute('filter', `drop-shadow(0 0 ${r}px #fcc419)`);
+                circle.setAttribute('fill', color);
+                circle.setAttribute('opacity', opacity);
+                circle.setAttribute('filter', `drop-shadow(0 0 ${r}px ${color})`);
                 layer.appendChild(circle);
             };
 
             // 1. Draw Stored Static Charges
-            const numStatic = Math.min(Math.round(Math.abs(plateDiff) * 8), 40);
+            const rawNum = Math.abs(plateDiff) * 8;
+            const numStatic = Math.min(Math.ceil(rawNum), 40);
             if (numStatic > 0) {
                 const isNeg3Positive = plateDiff > 0;
-                let splx = 0, sply = 0;
+                let splx = 0, sply = 0, snlx = 0, snly = 0;
                 for (let s = 0; s < numStatic; s++) {
                     const hash1 = Math.abs(Math.sin(s * 12.9898 + comp.x * 78.233 + comp.y) * 43758.5453);
                     const hash2 = Math.abs(Math.sin(s * 78.233 + comp.x * 12.9898 + comp.y * 3) * 43758.5453);
@@ -2316,16 +2418,24 @@ function renderParticles() {
                     // すべての値に scale を適用
                     const rY = (-17 + rand1 * 34) * scale;
                     const rX = (-2 + rand2 * 4) * scale;
-                    const plateOffset = (isNeg3Positive ? -5.5 : 5.5) * scale;
+                    const posPlateOffset = (isNeg3Positive ? -5.5 : 5.5) * scale;
+                    const negPlateOffset = (isNeg3Positive ? 5.5 : -5.5) * scale;
                     
                     if (comp.rotation === 0 || comp.rotation === 2) {
-                        splx = plateOffset + rX;
-                        sply = rY;
+                        splx = posPlateOffset + rX; sply = rY;
+                        snlx = negPlateOffset + rX; snly = rY;
                     } else {
-                        sply = plateOffset + rX;
-                        splx = rY;
+                        sply = posPlateOffset + rX; splx = rY;
+                        snly = negPlateOffset + rX; snlx = rY;
                     }
-                    drawCapParticle(splx, sply);
+
+                    // 少数部分を使って滑らかにフェードインさせる
+                    const opacity = Math.min(Math.max(rawNum - s, 0), 1);
+
+                    // 正極側の電荷（濃いピンク）
+                    drawCapParticle(splx, sply, '#ff1493', opacity);
+                    // 負極側の電荷（青紫色）
+                    drawCapParticle(snlx, snly, '#5c5cff', opacity);
                 }
             }
 
@@ -2351,8 +2461,9 @@ function renderParticles() {
                     lx1 = 0; ly1 = half - progress * travel;
                     lx2 = 0; ly2 = -gap - progress * travel;
                 }
-                drawCapParticle(lx1, ly1);
-                drawCapParticle(lx2, ly2);
+                const mColor = isElectronMode ? '#5c5cff' : '#ff1493';
+                drawCapParticle(lx1, ly1, mColor);
+                drawCapParticle(lx2, ly2, mColor);
             }
             return;
         }
@@ -2367,13 +2478,15 @@ function renderParticles() {
             const pos = getParticlePos(comp, progress); // Normalize 0..1
             
             if (pos) {
-                const r = Math.max(1.2, CELL_SIZE * 0.035);
+                const r = Math.max(1.5, CELL_SIZE * 0.045);
                 const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
                 circle.setAttribute('cx', pos.x);
                 circle.setAttribute('cy', pos.y);
                 circle.setAttribute('r', r);
-                circle.setAttribute('fill', '#fcc419'); // Golden light
-                circle.setAttribute('filter', `drop-shadow(0 0 ${r}px #fcc419)`);
+                const color = isElectronMode ? '#5c5cff' : '#ff1493';
+                circle.setAttribute('fill', color);
+                circle.setAttribute('opacity', '1');
+                circle.setAttribute('filter', `drop-shadow(0 0 ${r}px ${color})`);
                 layer.appendChild(circle);
             }
         }
@@ -3388,6 +3501,8 @@ if (trashCan && clearConfirmModal && clearConfirmBackdrop) {
 
     // 「はい」ボタン
     document.getElementById('clear-yes-btn').onclick = () => {
+        forceStopSimulation(); // シミュレーション動作中なら停止させる
+        audio.playTrashAll();  // 全消去用の少し長い「シュッ」という音
         components = [];
         simulationResults = null;
         globalGraphHistory = [];

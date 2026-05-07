@@ -924,6 +924,12 @@ input:checked + .slider-toggle:before {
         padding: 8px 16px;
         font-size: 14px;
     }
+
+    /* 歯車設定ウィンドウの横幅調整 */
+    #toolbar-settings-panel {
+        width: 80vw !important;
+        right: 10vw !important; /* 中央付近に配置されるように調整 */
+    }
 }
 
 /* 計測器レンジ選択用ラジオボタンのスタイリング */
@@ -946,3 +952,68 @@ input:checked + .slider-toggle:before {
     opacity: 0.8;
 }
 
+
+/* キャリア設定用トグルスイッチ */
+.carrier-switch {
+  position: relative;
+  display: inline-block;
+  width: 140px;
+  height: 32px;
+  background-color: var(--glass-bg);
+  border-radius: 16px;
+  border: 1px solid var(--glass-border);
+  cursor: pointer;
+}
+.carrier-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.carrier-slider {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0;
+  font-size: 13px;
+  font-weight: bold;
+  color: #ffffff !important;
+  transition: 0.4s;
+  z-index: 1;
+}
+.carrier-thumb {
+  position: absolute;
+  height: 26px;
+  width: 66px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #ff1493;
+  transition: 0.4s;
+  border-radius: 13px;
+  z-index: 0;
+}
+input:checked ~ .carrier-thumb {
+  transform: translateX(70px);
+  background-color: #5c5cff;
+}
+.carrier-text-pos, .carrier-text-neg {
+  z-index: 2;
+  position: relative;
+  width: 50%;
+  text-align: center;
+  transition: 0.4s;
+  pointer-events: none;
+}
+#toolbar-settings-panel input:not(:checked) ~ .carrier-slider span.carrier-text-pos {
+  color: #ffffff !important;
+}
+#toolbar-settings-panel input:checked ~ .carrier-slider span.carrier-text-neg {
+  color: #ffffff !important;
+}
+#toolbar-settings-panel input:checked ~ .carrier-slider span.carrier-text-pos {
+  color: #aaaaaa !important;
+}
+#toolbar-settings-panel input:not(:checked) ~ .carrier-slider span.carrier-text-neg {
+  color: #aaaaaa !important;
+}

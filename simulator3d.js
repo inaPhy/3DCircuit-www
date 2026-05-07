@@ -66,12 +66,19 @@ class Simulator3D {
 
         // 電荷表示用のインスタンスメッシュ（最大2000個）
         const particleGeo = new THREE.SphereGeometry(4, 8, 8);
-        const particleMat = new THREE.MeshBasicMaterial({ color: 0xfcc419 });
+        const particleMat = new THREE.MeshBasicMaterial({ color: 0xff1493 }); // 正電荷
         this.particleMesh = new THREE.InstancedMesh(particleGeo, particleMat, 2000);
         this.particleMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
         this.scene.add(this.particleMesh);
 
+        // 負電荷表示用のインスタンスメッシュ（青紫色）
+        const negParticleMat = new THREE.MeshBasicMaterial({ color: 0x5c5cff }); 
+        this.negParticleMesh = new THREE.InstancedMesh(particleGeo, negParticleMat, 2000);
+        this.negParticleMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        this.scene.add(this.negParticleMesh);
+
         window.addEventListener('resize', () => this.onWindowResize());
+
 
         this.animate();
     }
@@ -1112,12 +1119,16 @@ class Simulator3D {
         const showParticlesCheckbox = document.getElementById('show-particles-checkbox');
         if (showParticlesCheckbox && !showParticlesCheckbox.checked) {
             this.particleMesh.visible = false;
+            if (this.negParticleMesh) this.negParticleMesh.visible = false;
             return;
         }
         this.particleMesh.visible = true;
+        if (this.negParticleMesh) this.negParticleMesh.visible = true;
 
         let count = 0;
+        let negCount = 0;
         const dummy = new THREE.Object3D();
+        const negDummy = new THREE.Object3D();
 
         // クラス共通の最小電位を基準とする（未設定なら0）
         const minV = this.minV !== undefined ? this.minV : 0;
@@ -1163,7 +1174,11 @@ class Simulator3D {
 
                         dummy.position.set(cx + lx * this.GRID_SCALE, cy + ly * this.GRID_SCALE, z + 2);
                         dummy.updateMatrix();
-                        this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                        if (typeof isElectronMode !== 'undefined' && isElectronMode && this.negParticleMesh) {
+                            this.negParticleMesh.setMatrixAt(negCount++, dummy.matrix);
+                        } else {
+                            this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                        }
                     }
                 });
             } else if (comp.type === 'wire_l') {
@@ -1194,7 +1209,11 @@ class Simulator3D {
                     const z = (vStart + (vEnd - vStart) * prog - minV) * this.Z_SCALE;
                     dummy.position.set(cx + rx * this.GRID_SCALE, cy - ry * this.GRID_SCALE, z + 2);
                     dummy.updateMatrix();
-                    this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                    if (typeof isElectronMode !== 'undefined' && isElectronMode && this.negParticleMesh) {
+                        this.negParticleMesh.setMatrixAt(negCount++, dummy.matrix);
+                    } else {
+                        this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                    }
                 }
             } else if (comp.type === 'capacitor') {
                 let v1, v2;
@@ -1205,11 +1224,12 @@ class Simulator3D {
 
                 // 1. Static Stored Charges (Plate Colony)
                 const plateDiff = v1 - v2;
-                const numStatic = Math.min(Math.round(Math.abs(plateDiff) * 8), 40);
+                const rawNum = Math.abs(plateDiff) * 8;
+                const numStatic = Math.min(Math.ceil(rawNum), 40);
                 if (numStatic > 0) {
                     const isV1Positive = plateDiff > 0;
                     for (let s = 0; s < numStatic; s++) {
-                        if (count >= 2000) break;
+                        if (count >= 2000 || negCount >= 2000) break;
                         const hash1 = Math.abs(Math.sin(s * 12.9898 + comp.x * 78.233 + comp.y) * 43758.5453);
                         const hash2 = Math.abs(Math.sin(s * 78.233 + comp.x * 12.9898 + comp.y * 3) * 43758.5453);
                         const rand1 = hash1 - Math.floor(hash1);
@@ -1218,24 +1238,44 @@ class Simulator3D {
                         const rY = -0.23 + rand1 * 0.46;
                         const rX = -0.025 + rand2 * 0.05;
 
-                        let lx, ly, z;
+                        let splx, sply, snlx, snly, sz, nz;
                         const isIll = (typeof showIllustrations !== 'undefined' && showIllustrations);
                         const v1Offset = (comp.rotation === 0) ? (isIll ? -0.125 : -0.117) : (comp.rotation === 1) ? (isIll ? 0.125 : 0.117) : (comp.rotation === 2) ? (isIll ? 0.125 : 0.117) : (isIll ? -0.125 : -0.117);
                         const v2Offset = -v1Offset;
 
-                        if (comp.rotation === 0 || comp.rotation === 2) {
-                            lx = (isV1Positive ? v1Offset : v2Offset) + (isV1Positive ? rX : -rX);
-                            ly = rY;
-                        } else {
-                            ly = (isV1Positive ? v1Offset : v2Offset) - (isV1Positive ? rX : -rX);
-                            lx = rY;
-                        }
-                        z = (isV1Positive ? v1 : v2);
+                        const posOffset = isV1Positive ? v1Offset : v2Offset;
+                        const negOffset = isV1Positive ? v2Offset : v1Offset;
 
-                        dummy.position.set(cx + lx * this.GRID_SCALE, cy + ly * this.GRID_SCALE, (z - minV) * this.Z_SCALE + 2);
+                        if (comp.rotation === 0 || comp.rotation === 2) {
+                            splx = posOffset + (isV1Positive ? rX : -rX); sply = rY;
+                            snlx = negOffset + (isV1Positive ? rX : -rX); snly = rY;
+                        } else {
+                            sply = posOffset - (isV1Positive ? rX : -rX); splx = rY;
+                            snly = negOffset - (isV1Positive ? rX : -rX); snlx = rY;
+                        }
+                        
+                        sz = isV1Positive ? v1 : v2;
+                        nz = isV1Positive ? v2 : v1;
+
+                        const scaleFactor = Math.min(Math.max(rawNum - s, 0), 1);
+
+                        // Positive Charge
+                        dummy.position.set(cx + splx * this.GRID_SCALE, cy + sply * this.GRID_SCALE, (sz - minV) * this.Z_SCALE + 2);
+                        dummy.scale.set(scaleFactor, scaleFactor, scaleFactor);
                         dummy.updateMatrix();
                         this.particleMesh.setMatrixAt(count++, dummy.matrix);
+
+                        // Negative Charge
+                        if (this.negParticleMesh) {
+                            negDummy.position.set(cx + snlx * this.GRID_SCALE, cy + snly * this.GRID_SCALE, (nz - minV) * this.Z_SCALE + 2);
+                            negDummy.scale.set(scaleFactor, scaleFactor, scaleFactor);
+                            negDummy.updateMatrix();
+                            this.negParticleMesh.setMatrixAt(negCount++, negDummy.matrix);
+                        }
                     }
+                    // 他の粒子に影響しないようスケールをリセット
+                    dummy.scale.set(1, 1, 1);
+                    if (this.negParticleMesh) negDummy.scale.set(1, 1, 1);
                 }
 
                 // 2. Moving Charges (Wires)
@@ -1256,7 +1296,11 @@ class Simulator3D {
 
                         dummy.position.set(cx + lx * this.GRID_SCALE, cy + ly * this.GRID_SCALE, z + 2);
                         dummy.updateMatrix();
-                        this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                        if (typeof isElectronMode !== 'undefined' && isElectronMode && this.negParticleMesh) {
+                            this.negParticleMesh.setMatrixAt(negCount++, dummy.matrix);
+                        } else {
+                            this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                        }
                     }
                 }
             } else {
@@ -1303,7 +1347,11 @@ class Simulator3D {
 
                     dummy.position.set(cx + lx * this.GRID_SCALE, cy + ly * this.GRID_SCALE, z + 2);
                     dummy.updateMatrix();
-                    this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                    if (typeof isElectronMode !== 'undefined' && isElectronMode && this.negParticleMesh) {
+                        this.negParticleMesh.setMatrixAt(negCount++, dummy.matrix);
+                    } else {
+                        this.particleMesh.setMatrixAt(count++, dummy.matrix);
+                    }
                 }
             }
         });
@@ -1315,6 +1363,15 @@ class Simulator3D {
             this.particleMesh.setMatrixAt(count, dummy.matrix);
         }
         this.particleMesh.instanceMatrix.needsUpdate = true;
+
+        if (this.negParticleMesh) {
+            negDummy.position.set(0, 0, -10000);
+            negDummy.updateMatrix();
+            for (; negCount < 2000; negCount++) {
+                this.negParticleMesh.setMatrixAt(negCount, negDummy.matrix);
+            }
+            this.negParticleMesh.instanceMatrix.needsUpdate = true;
+        }
     }
 
     updateGrid() {
