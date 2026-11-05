@@ -1152,3 +1152,72 @@ input:checked ~ .carrier-thumb {
   color: #aaaaaa !important;
 }
 
+
+/* 結果表示エリア（解析結果・電圧波形・電流波形）
+   横長画面: 画面幅に合わせて横並び / 縦長画面: 縦並び */
+.results-dock {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(var(--footer-h, 80px) + 10px);
+    display: flex;
+    flex-direction: row;
+    align-items: stretch; /* 横並びのときは高さをそろえる */
+    gap: 10px;
+    z-index: 1000;
+    pointer-events: none; /* 空いている部分は回路の操作を妨げない */
+}
+
+.results-dock > .results-panel {
+    pointer-events: auto;
+}
+
+.results-dock > .results-panel:not(.show) {
+    display: none;
+}
+
+.results-dock > .results-panel:not(.floating) {
+    position: relative;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
+    transform: none;
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    max-height: calc(100vh - var(--footer-h, 80px) - 120px);
+    box-sizing: border-box;
+}
+
+/* ドラッグで取り出したパネル */
+.results-panel.floating {
+    position: fixed;
+    transform: none;
+    bottom: auto;
+    right: auto;
+    max-width: none;
+}
+
+@media (orientation: portrait) {
+    .results-dock {
+        flex-direction: column;
+        align-items: stretch;
+        max-height: min(60dvh, calc(100dvh - var(--footer-h, 80px) - 80px)); /* 回路が見えるよう画面の6割まで。あふれた分はスクロール */
+        overflow-y: auto;
+        pointer-events: auto;
+    }
+    /* 縦並びのときはグラフを少し低くする（index.html のインライン指定 180px を上書き） */
+    #voltage-graph-panel > div:nth-child(2),
+    #current-graph-panel > div:nth-child(2) {
+        height: 130px !important;
+    }
+    .results-dock > .results-panel:not(.floating) {
+        flex: 0 0 auto;
+        max-height: none;
+    }
+    .results-dock > #results-panel:not(.floating) {
+        max-height: 40vh;
+    }
+}

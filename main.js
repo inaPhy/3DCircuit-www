@@ -174,6 +174,44 @@ const bringToFront = (panel) => {
     panel.style.zIndex = topZIndex;
 };
 
+// 結果表示エリアから取り出して、ドラッグで自由に動かせる状態にする
+function undockPanel(panel) {
+    if (panel.classList.contains('floating')) return;
+    const rect = panel.getBoundingClientRect();
+    panel.classList.add('floating');
+    panel.style.left = `${rect.left}px`;
+    panel.style.top = `${rect.top}px`;
+    panel.style.width = `${rect.width}px`;
+}
+
+// 閉じたパネルは次に開くとき結果表示エリアに戻す
+function redockPanel(panel) {
+    panel.classList.remove('floating');
+    ['left', 'top', 'right', 'width'].forEach(prop => { panel.style[prop] = ''; });
+}
+
+function updateFooterHeightVar() {
+    const footer = document.getElementById('footer');
+    if (footer) document.documentElement.style.setProperty('--footer-h', `${footer.offsetHeight}px`);
+}
+window.addEventListener('resize', updateFooterHeightVar);
+window.addEventListener('DOMContentLoaded', () => {
+    updateFooterHeightVar();
+    document.querySelectorAll('#results-dock > .results-panel').forEach(panel => {
+        new MutationObserver(() => {
+            if (!panel.classList.contains('show') && panel.classList.contains('floating')) redockPanel(panel);
+        }).observe(panel, { attributes: true, attributeFilter: ['class'] });
+    });
+    // パネルの幅が変わったらグラフを描き直す
+    if (typeof ResizeObserver !== 'undefined') {
+        const ro = new ResizeObserver(() => { if (typeof redrawGraphs === 'function') redrawGraphs(); });
+        ['voltage-graph-canvas', 'current-graph-canvas'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) ro.observe(el);
+        });
+    }
+});
+
 // サウンド管理
 class AudioManager {
     constructor() {
@@ -1171,8 +1209,10 @@ function setupEventListeners() {
         header.addEventListener('pointerdown', (e) => {
             if (e.target.tagName === 'SPAN') return;
             isDragging = true;
+            undockPanel(panel);
             startX = e.clientX; startY = e.clientY;
-            initX = panel.offsetLeft; initY = panel.offsetTop;
+            const rect = panel.getBoundingClientRect();
+            initX = rect.left; initY = rect.top;
             header.setPointerCapture(e.pointerId);
             e.preventDefault();
         });
@@ -4068,10 +4108,12 @@ if (resultsHeader && resultsPanel) {
     resultsHeader.addEventListener('pointerdown', (e) => {
         if (e.target.id === 'close-results-btn') return;
         isDraggingResults = true;
+        undockPanel(resultsPanel);
         dragStartX = e.clientX;
         dragStartY = e.clientY;
-        initialPanelX = resultsPanel.offsetLeft;
-        initialPanelY = resultsPanel.offsetTop;
+        const rect = resultsPanel.getBoundingClientRect();
+        initialPanelX = rect.left;
+        initialPanelY = rect.top;
         resultsHeader.setPointerCapture(e.pointerId);
         e.preventDefault();
     });
