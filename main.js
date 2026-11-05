@@ -207,8 +207,16 @@ function applyCircuitData(data) {
 }
 
 function applyCircuitDataInner(data) {
-    // 今のマス目（スマホ縦画面は横5マス）からはみ出す部品は、画面を狭めたときと同じく削除する
-    components = data.components.filter(c => c.x < GRID_SIZE_X && c.y < GRID_SIZE_Y);
+    // スマホの縦と横で作った回路は、90度回すと収まるなら回して読み込む
+    let loaded = data.components;
+    const fits = list => list.every(c => c.x < GRID_SIZE_X && c.y < GRID_SIZE_Y);
+    if (!fits(loaded) && (GRID_SIZE_X === 5 || GRID_SIZE_X === 7)) {
+        const dir = GRID_SIZE_X === 7 ? 1 : -1;
+        const rotated = rotateComponents(loaded, dir, GRID_SIZE_Y, GRID_SIZE_X);
+        if (fits(rotated)) loaded = rotated;
+    }
+    // 今のマス目からはみ出す部品は、画面を狭めたときと同じく削除する
+    components = loaded.filter(c => c.x < GRID_SIZE_X && c.y < GRID_SIZE_Y);
     const removedCount = data.components.length - components.length;
     if (data.settings) {
         const applyToggle = (id, value) => {
@@ -248,7 +256,7 @@ function applyCircuitDataInner(data) {
     render();
     if (removedCount > 0) {
         // 描画が終わってから知らせる
-        setTimeout(() => alert(`画面に入りきらない部品が${removedCount}個あったため削除しました。\n横向きの画面で開くと、すべての部品が表示されます。`), 50);
+        setTimeout(() => alert(`画面に入りきらない部品が${removedCount}個あったため削除しました。\nパソコンなど広い画面で開くと、すべての部品が表示されます。`), 50);
     }
 }
 
@@ -1061,6 +1069,30 @@ function registerServiceWorker() {
 
 const PHONE_LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 500px)';
 
+// 縦5x7 → 横7x5 は時計回り(1)、横7x5 → 縦5x7 は反時計回り(-1)、それ以外は回さない(0)
+function getGridRotationDir(fromX, fromY, toX, toY) {
+    if (fromX === 5 && fromY === 7 && toX === 7 && toY === 5) return 1;
+    if (fromX === 7 && fromY === 5 && toX === 5 && toY === 7) return -1;
+    return 0;
+}
+
+// 回路全体を90度回す（幅 gridX・高さ gridY のマス目を基準に）
+function rotateComponents(list, dir, gridX, gridY) {
+    return list.map(c => {
+        const rotated = { ...c };
+        if (dir > 0) {
+            rotated.x = gridY - 1 - c.y;
+            rotated.y = c.x;
+            rotated.rotation = ((c.rotation || 0) + 1) % 4;
+        } else {
+            rotated.x = c.y;
+            rotated.y = gridX - 1 - c.x;
+            rotated.rotation = ((c.rotation || 0) + 3) % 4;
+        }
+        return rotated;
+    });
+}
+
 function updateCanvasSize() {
     const workspace = document.getElementById('workspace');
     if (!workspace) return;
@@ -1068,16 +1100,27 @@ function updateCanvasSize() {
     const w = workspace.clientWidth;
     const h = workspace.clientHeight;
     
-    // 1. グリッド数の決定 (スマホ縦画面なら 5x7、それ以外は 11x7)
-    // スマホ横画面も 5x7 にして、向きを変えても部品が消えないようにする
+    // 1. グリッド数の決定 (スマホ縦画面は 5x7、スマホ横画面は 7x5、それ以外は 11x7)
     const isPhoneLandscape = window.matchMedia(PHONE_LANDSCAPE_QUERY).matches;
-    const nextGridX = ((w < h && w < 600) || isPhoneLandscape) ? 5 : 11;
-    const nextGridY = 7; // 縦は7で固定
+    let nextGridX = 11;
+    let nextGridY = 7;
+    if (isPhoneLandscape) {
+        nextGridX = 7;
+        nextGridY = 5;
+    } else if (w < h && w < 600) {
+        nextGridX = 5;
+    }
     
     let needsRender = false;
 
-    // 2. グリッド縮小時のはみ出しパーツ削除処理
-    if (nextGridX < GRID_SIZE_X || nextGridY < GRID_SIZE_Y) {
+    // 2. スマホの縦⇔横の切り替えでは、回路ごと90度回して部品を残す
+    const rotateDir = getGridRotationDir(GRID_SIZE_X, GRID_SIZE_Y, nextGridX, nextGridY);
+    if (rotateDir !== 0) {
+        components = rotateComponents(components, rotateDir, GRID_SIZE_X, GRID_SIZE_Y);
+        if (isSimulating) activeNetlist = buildNetlist(); // 素子の状態はIDで保持されるので解析は継続
+        needsRender = true;
+    } else if (nextGridX < GRID_SIZE_X || nextGridY < GRID_SIZE_Y) {
+        // グリッド縮小時のはみ出しパーツ削除処理
         const outOfBounds = components.filter(c => c.x >= nextGridX || c.y >= nextGridY);
         if (outOfBounds.length > 0) {
             // はみ出しがある場合はシミュレーションを停止して削除
@@ -1647,6 +1690,11 @@ function setupEventListeners() {
     }
     // Window Resize
     window.addEventListener('resize', updateCanvasSize);
+    // 画面の向きが変わったときも確実にマス目を切り替える
+    ['(orientation: portrait)', PHONE_LANDSCAPE_QUERY].forEach(q => {
+        const mq = window.matchMedia(q);
+        if (mq.addEventListener) mq.addEventListener('change', updateCanvasSize);
+    });
 
     // Canvas Interaction (Selection and Dragging existing)
     interactionLayer.addEventListener('pointerdown', (e) => {

@@ -1320,9 +1320,10 @@ input:checked ~ .carrier-thumb {
         min-width: 0;
     }
 
+    /* 右の操作列: 上からゴミ箱・切替ボタン・速度スライダー（縦）・OK（右下） */
     #footer {
-        width: 150px !important;
-        flex: 0 0 150px;
+        width: 80px !important;
+        flex: 0 0 80px;
         height: 100% !important;
         border-top: none;
         border-left: 1px solid var(--glass-border);
@@ -1331,36 +1332,61 @@ input:checked ~ .carrier-thumb {
     .footer-inner {
         flex-direction: column !important;
         justify-content: space-between !important;
-        padding: 12px 6px !important;
-        gap: 10px;
+        align-items: center !important;
+        padding: 8px 4px !important;
+        gap: 6px;
     }
-    /* 速度スライダーを1段目に、切替ボタンは3つずつ並べる */
+    .footer-right {
+        order: 1;
+    }
     .footer-center {
-        display: grid !important;
-        grid-template-columns: repeat(3, auto);
-        justify-content: center;
-        justify-items: center;
-        gap: 10px 8px !important;
+        order: 2;
+        flex-direction: column;
+        gap: 6px !important;
     }
-    .footer-center > div:first-child {
-        grid-column: 1 / -1;
-        gap: 0 !important;
+    .footer-left {
+        order: 3;
     }
     .slider-label {
         display: none;
     }
+    /* 速度スライダーを縦向きに（上ほど速い） */
+    .footer-center > div:first-child {
+        order: 1;
+        position: relative;
+        display: block !important;
+        width: 72px;
+        height: 112px;
+    }
     .time-scale-box {
-        width: 120px !important;
+        position: absolute !important;
+        width: 104px !important;
+        height: 40px !important;
+        left: 50%;
+        top: 50%;
+        transform: translate(calc(-50% + 14px), -50%) rotate(-90deg);
+    }
+    #time-scale-slider {
+        margin-top: 0 !important;
+    }
+    #time-scale-val {
+        top: -30px !important;
+        transform: translateX(-50%) rotate(90deg) !important;
     }
     #solve-btn, #stop-btn {
-        padding: 10px 18px;
-        font-size: 16px;
-        min-width: 100px;
+        padding: 8px 0;
+        font-size: 14px;
+        min-width: 0;
+        width: 64px;
     }
     #trash-can {
-        width: 56px;
-        height: 56px;
+        width: 48px;
+        height: 48px;
         margin: 0;
+    }
+    #trash-can svg {
+        width: 22px;
+        height: 30px;
     }
     body.is-simulating .footer-right {
         display: none !important;
@@ -1369,7 +1395,7 @@ input:checked ~ .carrier-thumb {
     /* 結果・グラフは回路の上に重ね、グラフは電圧か電流の片方だけ */
     .results-dock {
         left: 92px;
-        right: 158px;
+        right: 88px;
         top: auto;
         bottom: 8px;
         flex-direction: row;
@@ -1394,7 +1420,7 @@ input:checked ~ .carrier-thumb {
         top: 10px !important;
         left: 96px !important;
         right: auto !important;
-        width: min(360px, calc(100vw - 260px)) !important;
+        width: min(360px, calc(100vw - 190px)) !important;
         max-height: calc(100dvh - 20px) !important;
     }
 }
