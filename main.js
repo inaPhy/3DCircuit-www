@@ -167,6 +167,184 @@ function validateCircuitFile(data) {
 }
 
 
+// 保存ファイル・回路リンク共通: 現在の回路と表示設定をまとめる
+function buildCircuitData() {
+    const toolbarVisibility = {};
+    document.querySelectorAll('.tool-item').forEach(item => {
+        if (!item.dataset.type || !SUPPORTED_COMPONENT_TYPES.has(item.dataset.type)) return;
+        toolbarVisibility[item.dataset.type] = item.style.display !== 'none';
+    });
+    const checked = id => { const el = document.getElementById(id); return el ? el.checked : false; };
+    return {
+        version: window.APP_VERSION ? window.APP_VERSION.storageFormat : "1.3",
+        appVersion: window.APP_VERSION ? window.APP_VERSION.number : undefined,
+        components: components.map(serializeComponent),
+        settings: {
+            darkMode: checked('dark-mode-checkbox'),
+            absMode: checked('abs-mode-checkbox'),
+            show3d: checked('show-3d-checkbox'),
+            showParticles: checked('show-particles-checkbox'),
+            showResults: checked('results-toggle-checkbox'),
+            isElectronMode: checked('electron-mode-checkbox'),
+            timeScale: parseFloat(document.getElementById('time-scale-slider').value),
+            showIllustrations: checked('illustration-checkbox'),
+            toolbarVisibility: toolbarVisibility
+        }
+    };
+}
+
+// 検証済みの回路データ（validateCircuitFile の戻り値）を画面に反映する
+function applyCircuitData(data) {
+    if (isSimulating) toggleSimulation(); // 動作中なら停止
+    // 今のマス目（スマホ縦画面は横5マス）からはみ出す部品は、画面を狭めたときと同じく削除する
+    components = data.components.filter(c => c.x < GRID_SIZE_X && c.y < GRID_SIZE_Y);
+    const removedCount = data.components.length - components.length;
+    if (data.settings) {
+        const applyToggle = (id, value) => {
+            if (value === undefined) return;
+            const el = document.getElementById(id);
+            if (el && el.checked !== (!!value)) {
+                el.checked = !!value;
+                el.dispatchEvent(new Event('change'));
+            }
+        };
+
+        applyToggle('dark-mode-checkbox', data.settings.darkMode);
+        applyToggle('abs-mode-checkbox', data.settings.absMode);
+        applyToggle('show-3d-checkbox', data.settings.show3d);
+        applyToggle('show-particles-checkbox', data.settings.showParticles);
+        applyToggle('results-toggle-checkbox', data.settings.showResults);
+        applyToggle('illustration-checkbox', data.settings.showIllustrations);
+        applyToggle('electron-mode-checkbox', data.settings.isElectronMode);
+
+        if (data.settings.timeScale !== undefined) {
+            const slider = document.getElementById('time-scale-slider');
+            if (slider) {
+                slider.value = data.settings.timeScale;
+                slider.dispatchEvent(new Event('input'));
+            }
+        }
+
+        if (data.settings.toolbarVisibility) {
+            document.querySelectorAll('.tool-item').forEach(item => {
+                const type = item.dataset.type;
+                if (data.settings.toolbarVisibility[type] !== undefined) {
+                    item.style.display = data.settings.toolbarVisibility[type] ? 'flex' : 'none';
+                }
+            });
+        }
+    }
+    render();
+    if (removedCount > 0) {
+        // 描画が終わってから知らせる
+        setTimeout(() => alert(`画面に入りきらない部品が${removedCount}個あったため削除しました。\n横向きの画面で開くと、すべての部品が表示されます。`), 50);
+    }
+}
+
+// --- 回路リンク ---
+// アドレス末尾の #c=... に、保存ファイルと同じ内容（回路＋表示設定）を圧縮して入れる。
+// settings.ini は変更せず、リンクを開いたときだけ反映される。読み込み時は保存ファイルと同じ検証を通す。
+const CIRCUIT_LINK_KEY = 'c';
+
+function bytesToBase64Url(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function base64UrlToBytes(text) {
+    const b64 = text.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((text.length + 3) % 4);
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+}
+
+async function transformBytes(bytes, stream) {
+    const out = await new Response(new Blob([bytes]).stream().pipeThrough(stream)).arrayBuffer();
+    return new Uint8Array(out);
+}
+
+// 先頭1文字で形式を区別: z = deflate 圧縮, j = 無圧縮
+async function encodeCircuitLink(data) {
+    const bytes = new TextEncoder().encode(JSON.stringify(data));
+    if (typeof CompressionStream !== 'undefined') {
+        try {
+            return 'z' + bytesToBase64Url(await transformBytes(bytes, new CompressionStream('deflate-raw')));
+        } catch (e) { /* 無圧縮にフォールバック */ }
+    }
+    return 'j' + bytesToBase64Url(bytes);
+}
+
+async function decodeCircuitLink(text) {
+    const kind = text[0];
+    if (kind !== 'z' && kind !== 'j') throw new Error('リンクの形式が不明です。');
+    if (kind === 'z' && typeof DecompressionStream === 'undefined') {
+        throw new Error('このブラウザは圧縮リンクに対応していません。');
+    }
+    let bytes;
+    try {
+        bytes = base64UrlToBytes(text.slice(1));
+        if (kind === 'z') bytes = await transformBytes(bytes, new DecompressionStream('deflate-raw'));
+    } catch (e) {
+        throw new Error('リンクが途中で切れているか、壊れています。');
+    }
+    if (bytes.length > 200000) throw new Error('リンクのデータが大きすぎます。');
+    try {
+        return JSON.parse(new TextDecoder().decode(bytes));
+    } catch (e) {
+        throw new Error('リンクが途中で切れているか、壊れています。');
+    }
+}
+
+async function buildCircuitLink() {
+    const encoded = await encodeCircuitLink(buildCircuitData());
+    const url = new URL(window.location.href);
+    url.hash = `${CIRCUIT_LINK_KEY}=${encoded}`;
+    return url.toString();
+}
+
+async function loadCircuitFromLink() {
+    const params = new URLSearchParams(window.location.hash.slice(1));
+    const encoded = params.get(CIRCUIT_LINK_KEY);
+    if (!encoded) return;
+    try {
+        applyCircuitData(validateCircuitFile(await decodeCircuitLink(encoded)));
+    } catch (err) {
+        console.warn('Circuit link could not be loaded.', err);
+        alert('リンクから回路を読み込めませんでした: ' + err.message);
+    }
+}
+
+async function copyCircuitLink(button) {
+    let link;
+    try {
+        link = await buildCircuitLink();
+    } catch (err) {
+        alert('リンクを作成できませんでした: ' + err.message);
+        return;
+    }
+    let copied = false;
+    if (navigator.clipboard && window.isSecureContext) {
+        try {
+            await navigator.clipboard.writeText(link);
+            copied = true;
+        } catch (e) { /* 下の方法へ */ }
+    }
+    if (!copied) {
+        window.prompt('このリンクをコピーしてください', link);
+        return;
+    }
+    if (button) {
+        const original = button.dataset.label || button.textContent;
+        button.dataset.label = original;
+        button.textContent = 'コピーしました ✓';
+        clearTimeout(button._resetTimer);
+        button._resetTimer = setTimeout(() => { button.textContent = original; }, 2000);
+    }
+    audio.playClick();
+}
+
 // パネルの重なり順管理
 let topZIndex = 2000;
 const bringToFront = (panel) => {
@@ -854,7 +1032,9 @@ function init() {
     updateCanvasSize(); // 初回サイズ計算
     setupEventListeners(); // イベントリスナーの登録
     document.documentElement.classList.add('light-mode');
-    loadSettings();
+    // settings.ini を反映してから、リンクに回路が入っていれば上書きする
+    loadSettings().then(loadCircuitFromLink);
+    window.addEventListener('hashchange', loadCircuitFromLink);
     registerServiceWorker();
     render();
 }
@@ -1379,27 +1559,7 @@ function setupEventListeners() {
     const saveBtn = document.getElementById('save-btn');
     if (saveBtn) {
         saveBtn.addEventListener('click', async () => {
-            const toolbarVisibility = {};
-            document.querySelectorAll('.tool-item').forEach(item => {
-                toolbarVisibility[item.dataset.type] = item.style.display !== 'none';
-            });
-
-            const data = {
-                version: window.APP_VERSION ? window.APP_VERSION.storageFormat : "1.2",
-                appVersion: window.APP_VERSION ? window.APP_VERSION.number : undefined,
-                components: components.map(serializeComponent),
-                settings: {
-                    darkMode: document.getElementById('dark-mode-checkbox').checked,
-                    absMode: document.getElementById('abs-mode-checkbox').checked,
-                    show3d: document.getElementById('show-3d-checkbox').checked,
-                    showParticles: document.getElementById('show-particles-checkbox').checked,
-                    showResults: document.getElementById('results-toggle-checkbox').checked,
-                    isElectronMode: document.getElementById('electron-mode-checkbox') ? document.getElementById('electron-mode-checkbox').checked : false,
-                    timeScale: parseFloat(document.getElementById('time-scale-slider').value),
-                    showIllustrations: document.getElementById('illustration-checkbox').checked,
-                    toolbarVisibility: toolbarVisibility
-                }
-            };
+            const data = buildCircuitData();
             const json = JSON.stringify(data, null, 2);
 
             // File System Access API が使える場合（PC版Chrome/Edgeなど）
@@ -1442,6 +1602,9 @@ function setupEventListeners() {
         });
     }
 
+    const copyLinkBtn = document.getElementById('copy-link-btn');
+    if (copyLinkBtn) copyLinkBtn.addEventListener('click', () => copyCircuitLink(copyLinkBtn));
+
     const loadBtnTrigger = document.getElementById('load-btn-trigger');
     const loadFileInput = document.getElementById('load-file-input');
     if (loadBtnTrigger && loadFileInput) {
@@ -1453,51 +1616,7 @@ function setupEventListeners() {
             reader.onload = (event) => {
                 try {
                     const parsedData = JSON.parse(event.target.result);
-                    const data = validateCircuitFile(parsedData);
-                    
-                    // Restore state
-                    components = data.components;
-                    if (data.settings) {
-                        const applyToggle = (id, value) => {
-                            if (value === undefined) return;
-                            const el = document.getElementById(id);
-                            if (el && el.checked !== (!!value)) {
-                                el.checked = !!value;
-                                el.dispatchEvent(new Event('change'));
-                            }
-                        };
-                        
-                        applyToggle('dark-mode-checkbox', data.settings.darkMode);
-                        applyToggle('abs-mode-checkbox', data.settings.absMode);
-                        applyToggle('show-3d-checkbox', data.settings.show3d);
-                        applyToggle('show-particles-checkbox', data.settings.showParticles);
-                        applyToggle('results-toggle-checkbox', data.settings.showResults);
-                        applyToggle('illustration-checkbox', data.settings.showIllustrations);
-                        
-                        if (data.settings.isElectronMode !== undefined) {
-                            applyToggle('electron-mode-checkbox', data.settings.isElectronMode);
-                        }
-                        
-                        if (data.settings.timeScale !== undefined) {
-                            const slider = document.getElementById('time-scale-slider');
-                            if (slider) {
-                                slider.value = data.settings.timeScale;
-                                slider.dispatchEvent(new Event('input'));
-                            }
-                        }
-
-                        if (data.settings.toolbarVisibility) {
-                            document.querySelectorAll('.tool-item').forEach(item => {
-                                const type = item.dataset.type;
-                                if (data.settings.toolbarVisibility[type] !== undefined) {
-                                    item.style.display = data.settings.toolbarVisibility[type] ? 'flex' : 'none';
-                                }
-                            });
-                        }
-                    }
-                    
-                    render();
-                    if (isSimulating) toggleSimulation(); // Stop if running
+                    applyCircuitData(validateCircuitFile(parsedData));
                     alert("回路と設定を読み込みました");
                 } catch (err) {
                     alert("ファイルの読み込みに失敗しました: " + err.message);
