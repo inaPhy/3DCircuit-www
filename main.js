@@ -1059,6 +1059,8 @@ function registerServiceWorker() {
     });
 }
 
+const PHONE_LANDSCAPE_QUERY = '(orientation: landscape) and (max-height: 500px)';
+
 function updateCanvasSize() {
     const workspace = document.getElementById('workspace');
     if (!workspace) return;
@@ -1067,7 +1069,9 @@ function updateCanvasSize() {
     const h = workspace.clientHeight;
     
     // 1. グリッド数の決定 (スマホ縦画面なら 5x7、それ以外は 11x7)
-    const nextGridX = (w < h && w < 600) ? 5 : 11;
+    // スマホ横画面も 5x7 にして、向きを変えても部品が消えないようにする
+    const isPhoneLandscape = window.matchMedia(PHONE_LANDSCAPE_QUERY).matches;
+    const nextGridX = ((w < h && w < 600) || isPhoneLandscape) ? 5 : 11;
     const nextGridY = 7; // 縦は7で固定
     
     let needsRender = false;
@@ -1381,7 +1385,8 @@ function setupEventListeners() {
     }
 
     // 縦長画面ではグラフを1つだけ表示するので、閉じるときは両方閉じる
-    const isPortraitLayout = () => window.matchMedia('(orientation: portrait)').matches;
+    // 縦画面とスマホ横画面はグラフを1枚ずつ表示する
+    const isPortraitLayout = () => window.matchMedia('(orientation: portrait)').matches || window.matchMedia(PHONE_LANDSCAPE_QUERY).matches;
     const closeGraphPanel = (panelId, otherId) => {
         document.getElementById(panelId).classList.remove('show');
         if (isPortraitLayout()) document.getElementById(otherId).classList.remove('show');
@@ -1409,7 +1414,7 @@ function setupEventListeners() {
             audio.playClick();
         });
     });
-    setGraphMode('i');
+    setGraphMode('v');
 
 
     const setupDraggable = (headerId, panelId) => {
@@ -1797,6 +1802,7 @@ function toggleSimulation() {
         audio.playGlocken3Off(); // 下がる3連音
     }
 
+    document.body.classList.toggle('is-simulating', isSimulating);
     solveBtn.innerText = isSimulating ? '停止' : 'OK';
     solveBtn.style.backgroundColor = isSimulating ? '#a5d8ff' : '#ffb8c6';
     

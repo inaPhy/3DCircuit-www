@@ -1038,6 +1038,10 @@ input:checked + .slider-toggle:before {
         width: 20px;
         height: 28px;
     }
+    /* 実行中は編集できないのでゴミ箱を隠し、その場所に切替ボタンを詰める */
+    body.is-simulating .footer-right {
+        display: none !important;
+    }
 
     /* 速度スライダーと切り替えボタンの調整 */
     .footer-inner {
@@ -1270,5 +1274,127 @@ input:checked ~ .carrier-thumb {
     #voltage-graph-panel > div:nth-child(2),
     #current-graph-panel > div:nth-child(2) {
         height: 130px !important;
+    }
+}
+
+/* スマホ横画面: 部品パネルを左（縦スクロール）、操作ボタンを右に置き、回路のマスを広く取る */
+@media (orientation: landscape) and (max-height: 500px) {
+    #app {
+        flex-direction: row;
+    }
+    #toolbar {
+        width: 84px;
+        flex: 0 0 84px;
+        height: 100%;
+        padding: 0;
+        border-bottom: none;
+        border-right: 1px solid var(--glass-border);
+    }
+    .toolbar-container {
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        height: 100%;
+        padding: 8px 0;
+        overflow-x: hidden;
+        overflow-y: auto;
+    }
+    .tool-item {
+        min-width: 0 !important;
+        padding: 3px;
+        touch-action: pan-y; /* 縦スワイプでスクロール、横ドラッグで部品を取り出す */
+    }
+    .tool-item:hover {
+        transform: none;
+    }
+    .icon-box {
+        width: 56px;
+        height: 56px;
+    }
+    #toolbar-settings-btn > div {
+        width: 56px !important;
+        height: 44px !important;
+    }
+    #workspace {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    #footer {
+        width: 150px !important;
+        flex: 0 0 150px;
+        height: 100% !important;
+        border-top: none;
+        border-left: 1px solid var(--glass-border);
+        padding: 0 !important;
+    }
+    .footer-inner {
+        flex-direction: column !important;
+        justify-content: space-between !important;
+        padding: 12px 6px !important;
+        gap: 10px;
+    }
+    /* 速度スライダーを1段目に、切替ボタンは3つずつ並べる */
+    .footer-center {
+        display: grid !important;
+        grid-template-columns: repeat(3, auto);
+        justify-content: center;
+        justify-items: center;
+        gap: 10px 8px !important;
+    }
+    .footer-center > div:first-child {
+        grid-column: 1 / -1;
+        gap: 0 !important;
+    }
+    .slider-label {
+        display: none;
+    }
+    .time-scale-box {
+        width: 120px !important;
+    }
+    #solve-btn, #stop-btn {
+        padding: 10px 18px;
+        font-size: 16px;
+        min-width: 100px;
+    }
+    #trash-can {
+        width: 56px;
+        height: 56px;
+        margin: 0;
+    }
+    body.is-simulating .footer-right {
+        display: none !important;
+    }
+
+    /* 結果・グラフは回路の上に重ね、グラフは電圧か電流の片方だけ */
+    .results-dock {
+        left: 92px;
+        right: 158px;
+        top: auto;
+        bottom: 8px;
+        flex-direction: row;
+        align-items: flex-end;
+    }
+    .results-dock > .results-panel:not(.floating) {
+        max-height: calc(100dvh - 16px);
+    }
+    .results-dock.graph-mode-i > #voltage-graph-panel,
+    .results-dock.graph-mode-v > #current-graph-panel {
+        display: none !important;
+    }
+    .graph-mode-toggle {
+        display: flex;
+    }
+    #voltage-graph-panel > div:nth-child(2),
+    #current-graph-panel > div:nth-child(2) {
+        height: 130px !important;
+    }
+
+    #toolbar-settings-panel {
+        top: 10px !important;
+        left: 96px !important;
+        right: auto !important;
+        width: min(360px, calc(100vw - 260px)) !important;
+        max-height: calc(100dvh - 20px) !important;
     }
 }
