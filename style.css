@@ -1152,22 +1152,3 @@ input:checked ~ .carrier-thumb {
   color: #aaaaaa !important;
 }
 
-.graph-time-row {
-    margin-top: 4px;
-    display: flex;
-    justify-content: flex-end;
-    font-size: 11px;
-    color: var(--text-secondary);
-}
-
-.graph-time-select {
-    margin-left: 6px;
-    font-size: 11px;
-    font-family: 'Roboto Mono', monospace;
-    padding: 1px 4px;
-    border-radius: 6px;
-    border: 1px solid var(--glass-border);
-    background: transparent;
-    color: inherit;
-    cursor: pointer;
-}

@@ -15,9 +15,11 @@ let editingCompType = null;
 let editingCompRotation = 0;
 let selectedGraphCompIds = []; // Up to 4 components
 let globalGraphHistory = []; // [{ t: シミュレーション時刻(s), voltages: {id: v, ...}, currents: {id: i, ...} }, ...]
-const GRAPH_TIME_WINDOWS = [0.5, 1, 2, 5, 10, 20, 50]; // 横軸の表示幅（秒）
+// 横軸の幅は「画面上で流れる実際の時間」で一定にする。
+// シミュレーション時間の幅 = 速度スライダーの倍率 × GRAPH_REAL_TIME_WINDOW（例: 0.1x → 2 s, 1.0x → 20 s）
+const GRAPH_REAL_TIME_WINDOW = 20;
 const graphSampleInterval = 0.005; // 記録の最小間隔（シミュレーション時間の秒）
-const maxGraphHistoryTime = Math.max(...GRAPH_TIME_WINDOWS); // これより古い記録は捨てる
+const maxGraphHistoryTime = GRAPH_REAL_TIME_WINDOW * 1.0; // 速度スライダー最大(1.0x)時の幅。これより古い記録は捨てる
 let graphTimeWindow = 2;
 let graphSimTime = 0; // シミュレーション開始からの経過時間（s）
 let graphAccumulatedTime = 0;
@@ -1194,22 +1196,6 @@ function setupEventListeners() {
     setupDraggable('current-graph-header', 'current-graph-panel');
 
     // Range Sliders
-    document.querySelectorAll('.graph-time-select').forEach(select => {
-        select.innerHTML = '';
-        GRAPH_TIME_WINDOWS.forEach(sec => {
-            const opt = document.createElement('option');
-            opt.value = sec;
-            opt.textContent = `${sec} s`;
-            select.appendChild(opt);
-        });
-        select.value = graphTimeWindow;
-        select.addEventListener('change', (e) => {
-            graphTimeWindow = parseFloat(e.target.value);
-            document.querySelectorAll('.graph-time-select').forEach(other => { other.value = e.target.value; });
-            redrawGraphs();
-        });
-    });
-
     document.getElementById('graph-v-range-slider').oninput = (e) => {
         graphRangeV = parseFloat(e.target.value);
         document.getElementById('graph-v-range-val').innerText = graphRangeV.toFixed(1) + 'V';
@@ -2365,6 +2351,11 @@ const timeScaleVal = document.getElementById('time-scale-val');
 function updateTimeScaleDisplay() {
     const val = parseFloat(timeScaleSlider.value);
     timeScale = val;
+    // 停止(0x)のときは直前の幅を保つ
+    if (val > 0) {
+        graphTimeWindow = val * GRAPH_REAL_TIME_WINDOW;
+        redrawGraphs();
+    }
     if (timeScaleVal) {
         timeScaleVal.innerText = val.toFixed(2) + 'x';
         const min = parseFloat(timeScaleSlider.min);
