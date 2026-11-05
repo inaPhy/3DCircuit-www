@@ -193,6 +193,8 @@ function redockPanel(panel) {
 function updateFooterHeightVar() {
     const footer = document.getElementById('footer');
     if (footer) document.documentElement.style.setProperty('--footer-h', `${footer.offsetHeight}px`);
+    const toolbar = document.getElementById('toolbar');
+    if (toolbar) document.documentElement.style.setProperty('--toolbar-h', `${toolbar.getBoundingClientRect().bottom}px`);
 }
 window.addEventListener('resize', updateFooterHeightVar);
 window.addEventListener('DOMContentLoaded', () => {
@@ -1184,16 +1186,36 @@ function setupEventListeners() {
         };
     }
 
-    document.getElementById('close-voltage-graph-btn').onclick = () => {
-        document.getElementById('voltage-graph-panel').classList.remove('show');
-        if (!document.getElementById('current-graph-panel').classList.contains('show')) selectedGraphCompIds = [];
+    // 縦長画面ではグラフを1つだけ表示するので、閉じるときは両方閉じる
+    const isPortraitLayout = () => window.matchMedia('(orientation: portrait)').matches;
+    const closeGraphPanel = (panelId, otherId) => {
+        document.getElementById(panelId).classList.remove('show');
+        if (isPortraitLayout()) document.getElementById(otherId).classList.remove('show');
+        if (!document.getElementById(otherId).classList.contains('show')) selectedGraphCompIds = [];
         updateResultsTable();
     };
-    document.getElementById('close-current-graph-btn').onclick = () => {
-        document.getElementById('current-graph-panel').classList.remove('show');
-        if (!document.getElementById('voltage-graph-panel').classList.contains('show')) selectedGraphCompIds = [];
-        updateResultsTable();
+    document.getElementById('close-voltage-graph-btn').onclick = () => closeGraphPanel('voltage-graph-panel', 'current-graph-panel');
+    document.getElementById('close-current-graph-btn').onclick = () => closeGraphPanel('current-graph-panel', 'voltage-graph-panel');
+
+    // 縦長画面の電圧・電流切替
+    const setGraphMode = (mode) => {
+        const dock = document.getElementById('results-dock');
+        if (!dock) return;
+        dock.classList.toggle('graph-mode-v', mode === 'v');
+        dock.classList.toggle('graph-mode-i', mode === 'i');
+        document.querySelectorAll('.graph-mode-toggle button').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.graphMode === mode);
+            btn.setAttribute('aria-pressed', btn.dataset.graphMode === mode ? 'true' : 'false');
+        });
+        redrawGraphs();
     };
+    document.querySelectorAll('.graph-mode-toggle button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            setGraphMode(btn.dataset.graphMode);
+            audio.playClick();
+        });
+    });
+    setGraphMode('i');
 
 
     const setupDraggable = (headerId, panelId) => {
@@ -1207,7 +1229,7 @@ function setupEventListeners() {
         let isDragging = false;
         let startX, startY, initX, initY;
         header.addEventListener('pointerdown', (e) => {
-            if (e.target.tagName === 'SPAN') return;
+            if (e.target.tagName === 'SPAN' || e.target.closest('button')) return;
             isDragging = true;
             undockPanel(panel);
             startX = e.clientX; startY = e.clientY;

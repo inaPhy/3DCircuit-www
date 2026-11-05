@@ -1,9 +1,9 @@
 (function exposeVersion(globalScope) {
     globalScope.APP_VERSION = Object.freeze({
-        number: '2.90',
+        number: '2.91',
         date: '2026/11/05',
         storageFormat: '1.3',
-        cache: '2.90.0'
+        cache: '2.91.0'
     });
 
     if (!globalScope.document) return;

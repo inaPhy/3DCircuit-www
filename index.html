@@ -292,7 +292,7 @@
 
             <div class="settings-app-info">
                 <a href="./manual/" target="_blank" rel="noopener">マニュアルを開く</a>
-                <p>Version <span data-app-version>2.90</span></p>
+                <p>Version <span data-app-version>2.91</span></p>
                 <p>&copy; 2026 Atsushi Inagaki.</p>
             </div>
         </div>
@@ -781,7 +781,7 @@
         </div>
 
         <!-- 結果表示エリア: 横長画面では横並び、縦長画面では縦並び -->
-        <div id="results-dock" class="results-dock">
+        <div id="results-dock" class="results-dock graph-mode-i">
         <!-- 結果一覧パネル -->
         <div id="results-panel" class="results-panel">
             <div id="results-panel-header"
@@ -808,6 +808,10 @@
                 style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--glass-border); padding-bottom:5px; margin-bottom:10px; cursor:move;">
                 <h4 id="voltage-graph-title" style="margin:0; pointer-events:none; font-size: 14px; color:#fab005;">電圧波形
                     (V)</h4>
+                <div class="graph-mode-toggle" role="group" aria-label="表示するグラフ">
+                    <button type="button" data-graph-mode="v">電圧</button>
+                    <button type="button" data-graph-mode="i">電流</button>
+                </div>
                 <span id="close-voltage-graph-btn"
                     style="cursor:pointer; font-size:20px; font-weight:bold; color:#333333; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background-color: rgba(0,0,0,0.1); border-radius: 50%; line-height:1;">&times;</span>
             </div>
@@ -834,6 +838,10 @@
                 style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--glass-border); padding-bottom:5px; margin-bottom:10px; cursor:move;">
                 <h4 id="current-graph-title" style="margin:0; pointer-events:none; font-size: 14px; color:#4dabf7;">電流波形
                     (A)</h4>
+                <div class="graph-mode-toggle" role="group" aria-label="表示するグラフ">
+                    <button type="button" data-graph-mode="v">電圧</button>
+                    <button type="button" data-graph-mode="i">電流</button>
+                </div>
                 <span id="close-current-graph-btn"
                     style="cursor:pointer; font-size:20px; font-weight:bold; color:#333333; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; background-color: rgba(0,0,0,0.1); border-radius: 50%; line-height:1;">&times;</span>
             </div>

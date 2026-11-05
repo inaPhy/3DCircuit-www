@@ -1200,18 +1200,42 @@ input:checked ~ .carrier-thumb {
     max-width: none;
 }
 
+/* 電圧・電流の切替ボタン（縦長画面のときだけ表示） */
+.graph-mode-toggle {
+    display: none;
+    margin-left: auto;
+    margin-right: 10px;
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.graph-mode-toggle button {
+    border: none;
+    background: transparent;
+    color: #555555;
+    font-size: 13px;
+    font-weight: bold;
+    padding: 4px 12px;
+    cursor: pointer;
+}
+
+.graph-mode-toggle button.active {
+    background: #fab005;
+    color: #ffffff;
+}
+
+#current-graph-panel .graph-mode-toggle button.active {
+    background: #4dabf7;
+}
+
+/* 縦長画面（スマホなど）: 解析結果は上、グラフは下。グラフは電圧か電流の片方だけ */
 @media (orientation: portrait) {
     .results-dock {
+        top: calc(var(--toolbar-h, 70px) + 8px);
         flex-direction: column;
+        justify-content: space-between;
         align-items: stretch;
-        max-height: min(60dvh, calc(100dvh - var(--footer-h, 80px) - 80px)); /* 回路が見えるよう画面の6割まで。あふれた分はスクロール */
-        overflow-y: auto;
-        pointer-events: auto;
-    }
-    /* 縦並びのときはグラフを少し低くする（index.html のインライン指定 180px を上書き） */
-    #voltage-graph-panel > div:nth-child(2),
-    #current-graph-panel > div:nth-child(2) {
-        height: 130px !important;
     }
     .results-dock > .results-panel:not(.floating) {
         flex: 0 0 auto;
@@ -1219,5 +1243,22 @@ input:checked ~ .carrier-thumb {
     }
     .results-dock > #results-panel:not(.floating) {
         max-height: 40vh;
+        margin-bottom: auto; /* グラフだけ閉じても上に留まる */
+    }
+    .results-dock > #voltage-graph-panel:not(.floating),
+    .results-dock > #current-graph-panel:not(.floating) {
+        margin-top: auto; /* 解析結果を閉じても下に留まる */
+    }
+    .results-dock.graph-mode-i > #voltage-graph-panel,
+    .results-dock.graph-mode-v > #current-graph-panel {
+        display: none !important;
+    }
+    .graph-mode-toggle {
+        display: flex;
+    }
+    /* グラフは少し低くする（index.html のインライン指定 180px を上書き） */
+    #voltage-graph-panel > div:nth-child(2),
+    #current-graph-panel > div:nth-child(2) {
+        height: 130px !important;
     }
 }
