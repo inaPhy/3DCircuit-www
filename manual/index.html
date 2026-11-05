@@ -102,202 +102,202 @@
         <!-- 5. アップデート履歴 -->
         <div class="card">
             <h2>5. アップデート履歴</h2>
-            <div class="history-item">
-                <span class="history-ver">Ver 3.00 (2026/11/05)</span>
+            <details class="history-item">
+                <summary class="history-ver">Ver 3.00 (2026/11/05)</summary>
                 <ul>
                     <li><b>変更</b>：電圧・電流グラフの縦軸の最大値の初期値を 5 V・0.5 A にしました（これまでは 10 V・1 A）。</li>
                     <li><b>追加</b>：グラフの縦軸の最大値を settings.ini（graph_voltage_max・graph_current_max）で決められるようにし、回路の保存ファイルと回路のリンクにも記録するようにしました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.99 (2026/11/05)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.99 (2026/11/05)</summary>
                 <ul>
                     <li><b>変更</b>：キャリア設定の「電子」を「負電荷」に変えました（粒1個の電気量は電気素量ではないため）。</li>
                     <li><b>改善</b>：粒1個の電気量の数値をスライダー（1〜500）で選び、単位（nC・μC・mC・C）はセレクトボックスで選ぶようにしました。目安の説明は「?」を押すと表示されます。スライダーのつまみはキャリアの色（正電荷はピンク、負電荷は青紫）になります。</li>
                     <li><b>改善</b>：極板の電荷の並び方を実際のコンデンサーに近づけました。電荷は向かい合う内側の面に、ほぼ一様（端がやや密）に並びます。新しい電荷は導線がつながる中央から入り、ほかの電荷が押し広げられて並び直します。減るときは中央から抜けていきます。2D と 3D は同じ並び方です。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.98 (2026/11/05)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.98 (2026/11/05)</summary>
                 <ul>
                     <li><b>改善</b>：コンデンサーの極板にたまる電荷の粒を、電圧ではなく電気量 Q（＝CV）から数えるようにしました。導線から1粒届くとちょうど1個増え、出ていくと1個減るので、電荷の保存が見て取れます（3D表示も同じ）。粒はフェードせず、届いた瞬間に1個現れます。</li>
                     <li><b>改善</b>：極板の粒は片側40個までを描き、それを超えている間は、1粒出入りするたびに極板の粒が少し動いて増減を表します。</li>
                     <li><b>追加</b>：設定の「キャリア設定」に「粒1個の電気量」を追加しました。数値（1〜500）と単位（nC・μC・mC・C）を選べ、1 nC〜500 C まで設定できます。目安はコンデンサーの容量の数値を10で割り、単位をそのまま（F→C）にした値です。導線を流れる粒の速さと極板の粒の数がそろって変わります。保存ファイル・回路のリンクにも記録されます。</li>
                     <li><b>修正</b>：コンデンサーの導線部分を流れる粒の量が、ほかの導線の半分になっていたのを直しました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.97 (2026/11/05)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.97 (2026/11/05)</summary>
                 <ul>
                     <li><b>改善</b>：スマホの横画面で、縦向きの速度スライダーを切替ボタンと同じ中心にそろえ、つまみの時計を正しい向き（長針が上）にしました。つまみを上下にドラッグするだけで動くようにしました。</li>
                     <li><b>改善</b>：値変更のウインドウが画面に収まらないときは、ウインドウの中をスクロールできるようにしました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.96 (2026/11/05)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.96 (2026/11/05)</summary>
                 <ul>
                     <li><b>改善</b>：スマホの横画面では、マス目を横7×縦5にしました。縦画面（横5×縦7）と切り替えると、回路全体が90度回って表示されるので、部品は消えません。スマホの縦・横で保存した回路も、向きに合わせて回して読み込みます。</li>
                     <li><b>改善</b>：スマホの横画面の右側の操作列を細くし、上からゴミ箱・切替ボタン・速度スライダー（縦向き、上ほど速い）・OKボタン（右下）の順に縦に並べました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.95 (2026/11/05)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.95 (2026/11/05)</summary>
                 <ul>
                     <li><b>改善</b>：スマホの縦画面では、OKを押して実行している間はゴミ箱を隠し、空いた場所に表示切替ボタンを並べるようにしました（実行中は回路を編集できないため）。</li>
                     <li><b>改善</b>：スマホの横画面では、部品パネルを左（縦スクロール）、OK・速度・切替ボタン・ゴミ箱を右に置くようにしました。</li>
                     <li><b>変更</b>：縦画面などでグラフを1枚だけ表示するとき、最初は電圧のグラフを表示するようにしました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.94 (2026/11/05)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.94 (2026/11/05)</summary>
                 <ul>
                     <li><b>不具合修正</b>：スマホの縦画面で、時間スライダーの倍率表示が時計のつまみからずれていた問題と、実行中にボタンが増えるとゴミ箱が画面の外にはみ出していた問題を修正しました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.93 (2026/11/05)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.93 (2026/11/05)</summary>
                 <ul>
                     <li><b>不具合修正</b>：「結果を表示」をオンにした回路をリンクや保存ファイルから開くと、OKを押す前から解析結果の枠が表示されていた問題を修正しました。読み込み時に設定の効果音が鳴らないようにしました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.92 (2026/11/05)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.92 (2026/11/05)</summary>
                 <ul>
                     <li><b>回路のリンク</b>：設定画面の「回路のリンクをコピー」で、今の回路と表示設定が入ったアドレスをコピーできるようにしました。そのアドレスを開くと同じ回路・設定で始まります（settings.ini は変更されません）。</li>
                     <li><b>スマホ縦画面での読み込み</b>：リンクや保存ファイルを開いたとき、画面（横5マス）に入りきらない部品は削除し、その数をお知らせするようにしました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.91 (2026/11/05)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.91 (2026/11/05)</summary>
                 <ul>
                     <li><b>スマホ（縦画面）の結果表示</b>：解析結果を画面の上に、グラフを下に表示するようにしました。グラフは電圧か電流の片方だけを表示し、グラフの見出しにある「電圧／電流」ボタンで切り替えられます。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.90 (2026/11/05)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.90 (2026/11/05)</summary>
                 <ul>
                     <li><b>結果ウィンドウの配置</b>：解析結果・電圧波形・電流波形を、横長の画面では横幅に合わせて横並びに、スマホなど縦長の画面では縦並びに自動で配置するようにしました。見出しをドラッグすると、そのウィンドウだけ自由に動かせます（閉じると元の位置に戻ります）。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.89 (2026/11/05)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.89 (2026/11/05)</summary>
                 <ul>
                     <li><b>グラフの横軸と速度</b>：横軸の幅が速度スライダーに連動するようにしました。グラフは常に実際の約20秒で端から端まで流れます（0.1xで2秒分、1.0xで20秒分を表示）。横軸の幅の選択欄はなくしました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.88 (2026/11/05)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.88 (2026/11/05)</summary>
                 <ul>
                     <li><b>グラフの横軸</b>：シミュレーション開始からの時間（秒）の目盛りを表示するようにしました。再生速度や画面のリフレッシュレートが変わっても、時間の刻みは一定です。</li>
                     <li><b>横軸の幅</b>：電圧・電流グラフの下で、表示する時間の幅を0.5〜50秒から選べるようにしました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.87 (2026/11/05)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.87 (2026/11/05)</summary>
                 <ul>
                     <li><b>単位の選択</b>：コンデンサーはF・mF・μF・nF、コイルはH・mH・μH・nHから単位を選べるようにしました。初期値は1 F・1 Hです。</li>
                     <li><b>代表値</b>：コンデンサーとコイルの代表値を1、2、5、10、100の5種類にし、選んだ単位で表示するようにしました。</li>
                     <li><b>保存データ</b>：以前のバージョンで保存した回路は、μF・mHのまま読み込まれます。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.86 (2026/08/17)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.86 (2026/08/17)</summary>
                 <ul>
                     <li><b>抵抗の代表値</b>：5、10、15、20、30、40、50、100 Ωの8種類を4列×2段で選択できるようにしました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.85 (2026/08/17)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.85 (2026/08/17)</summary>
                 <ul>
                     <li><b>アプリアイコン</b>：電池パネルそのものを使ったデザインに変更しました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.84 (2026/08/17)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.84 (2026/08/17)</summary>
                 <ul>
                     <li><b>アプリ情報</b>：設定パネルにマニュアル、現在のバージョン、著作権表記を追加しました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.83 (2026/08/17)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.83 (2026/08/17)</summary>
                 <ul>
                     <li><b>代表値ボタンの改善</b>：表記・配置・選択色を調整し、数値入力後にEnterキーで保存できるようにしました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.82 (2026/08/17)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.82 (2026/08/17)</summary>
                 <ul>
                     <li><b>よく使う値</b>：電源・抵抗・コンデンサー・コイルの代表値をワンタップで設定できるようにしました。</li>
                     <li><b>モバイル数値入力</b>：スマートフォンとタブレットでOS標準の数値キーボードが開きやすい入力欄にしました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.81 (2026/08/17)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.81 (2026/08/17)</summary>
                 <ul>
                     <li><b>タブレット対応</b>：PWAとしてホーム画面へ追加し、独立したWebアプリ表示で利用できるようにしました。</li>
                     <li><b>3D描画の軽量化</b>：3D形状とグリッドの不要な毎フレーム再生成を削減しました。</li>
                     <li><b>計算と読込の安全性</b>：0値の素子処理と、保存ファイル読込時の検証を改善しました。</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.80 (2026/05/07)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.80 (2026/05/07)</summary>
                 <ul>
                     <li><b>導線バリエーションの拡張</b>：導線の形状（直線・L字・T字・十字）の４種類にした．</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.70 (2026/05/07)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.70 (2026/05/07)</summary>
                 <ul>
                     <li><b>電荷のアニメーションのバグ修正</b>：パーツの繋ぎ目での点滅を解消．</li>
                     <li><b>キャリア設定機能</b>：正電荷（ピンク）と電子（青）の動きを切り替え可能にする．</li>
                     <li><b>保存ファイル</b>：保存時に名前や場所を指定できるようにした．</li>
                     <li><b>コンデンサーの負極</b>：コンデンサーが充電された時，負極にも電荷が貯まるようにした．</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.60 (2026/05/05)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.60 (2026/05/05)</summary>
                 <ul>
                     <li><b>操作音の追加</b>：心地よさを意識．</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.58 (2026/05/04)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.58 (2026/05/04)</summary>
                 <ul>
                     <li><b>3Dモデルの改善</b>：スイッチがOFFの際、電位差がある部分を「絶壁」ではなく物理的な「隙間」として表現．</li>
                     <li><b>3Dモデルの改善</b>：コンデンサーの電極を分離し、極板間を一様な電場にした表現．</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.57 (2026/05/04)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.57 (2026/05/04)</summary>
                 <ul>
                     <li><b>接地ロジックの高度化</b>：スコア制の接地判定アルゴリズムを導入．電池を複数直列に繋いだ際、最も電位の低いノードを自動的に特定して接地（0V）に設定．</li>
                     <li><b>接地優先順位の導入</b>：電池や交流電源がある場合、それらの端子を優先的に接地（0V）として固定するように改善．交流回路での表示の安定性が向上．</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.55 (2026/05/04)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.55 (2026/05/04)</summary>
                 <ul>
                     <li><b>名称変更</b>：アプリ名を「3D Circuit www」に変更．</li>
                     <li><b>接地ロジック刷新</b>：独立したネットワークごとの接地判定を導入．</li>
                     <li><b>2D電荷アニメーション修正</b>：極板全体に電荷が溜まるよう範囲を拡大．</li>
                     <li><b>バグ修正</b>：導線のダブルクリックで不要なパネルが出る問題を解消．</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.5 (2026/04)</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.5 (2026/04)</summary>
                 <ul>
                     <li><b>3D描画の安定化</b>：回路内の最低電位を0Vに固定する基準処理を導入．</li>
                     <li><b>設定UI刷新</b>：モーダルデザインの改善と、絶対値表示モードの追加．</li>
                 </ul>
-            </div>
-            <div class="history-item">
-                <span class="history-ver">Ver 2.0 〜 2.4</span>
+            </details>
+            <details class="history-item">
+                <summary class="history-ver">Ver 2.0 〜 2.4</summary>
                 <ul>
                     <li><b>3Dモデル機能</b>：電位を高さで表現する3Dプレビューを搭載．</li>
                     <li><b>ビジュアル拡張</b>：イラスト表示モード、ダークモード、グラフ表示機能を追加．</li>
                     <li><b>電荷アニメーション</b>：正電荷の動きによる電流の可視化．</li>
                 </ul>
-            </div>
+            </details>
         </div>
 
         <footer>

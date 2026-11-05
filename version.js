@@ -3,7 +3,7 @@
         number: '3.00',
         date: '2026/11/05',
         storageFormat: '1.3',
-        cache: '3.00.0'
+        cache: '3.00.1'
     });
 
     if (!globalScope.document) return;

@@ -173,10 +173,10 @@ kbd {
         padding: 20px;
     }
 }
-/* アップデート履歴スタイル */
+/* アップデート履歴スタイル（各バージョンは折りたたみ。見出しを押すと開く） */
 .history-item {
-    margin-bottom: 25px;
-    padding-bottom: 20px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
     border-bottom: 1px dashed var(--border-color);
 }
 
@@ -187,15 +187,46 @@ kbd {
 }
 
 .history-ver {
-    display: block;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-weight: bold;
     font-size: 1.1rem;
     color: var(--text-main);
-    margin-bottom: 10px;
     background: #f0f0f0;
     padding: 4px 12px;
     border-radius: 4px;
     width: fit-content;
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+.history-ver::-webkit-details-marker {
+    display: none;
+}
+
+/* 開閉の三角 */
+.history-ver::before {
+    content: "";
+    width: 0;
+    height: 0;
+    border-left: 7px solid currentColor;
+    border-top: 5px solid transparent;
+    border-bottom: 5px solid transparent;
+    transition: transform 0.15s;
+}
+
+.history-item[open] > .history-ver::before {
+    transform: rotate(90deg);
+}
+
+.history-ver:hover {
+    background: #e4e4e4;
+}
+
+.history-item[open] > .history-ver {
+    margin-bottom: 10px;
 }
 
 .history-item ul {
