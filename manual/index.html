@@ -12,7 +12,7 @@
 
     <header>
         <h1>3D Circuit www</h1>
-        <p>Version <span data-app-version>2.96</span> ユーザーズマニュアル</p>
+        <p>Version <span data-app-version>2.98</span> ユーザーズマニュアル</p>
         <a class="app-link" href="../">アプリに戻る</a>
     </header>
 
@@ -102,6 +102,22 @@
         <!-- 5. アップデート履歴 -->
         <div class="card">
             <h2>5. アップデート履歴</h2>
+            <div class="history-item">
+                <span class="history-ver">Ver 2.98 (2026/11/05)</span>
+                <ul>
+                    <li><b>改善</b>：コンデンサーの極板にたまる電荷の粒を、電圧ではなく電気量 Q（＝CV）から数えるようにしました。導線から1粒届くとちょうど1個増え、出ていくと1個減るので、電荷の保存が見て取れます（3D表示も同じ）。粒はフェードせず、届いた瞬間に1個現れます。</li>
+                    <li><b>改善</b>：極板の粒は片側40個までを描き、それを超えている間は、1粒出入りするたびに極板の粒が少し動いて増減を表します。</li>
+                    <li><b>追加</b>：設定の「キャリア設定」に「粒1個の電気量」を追加しました。数値（1〜500）と単位（nC・μC・mC・C）を選べ、1 nC〜500 C まで設定できます。目安はコンデンサーの容量の数値を10で割り、単位をそのまま（F→C）にした値です。導線を流れる粒の速さと極板の粒の数がそろって変わります。保存ファイル・回路のリンクにも記録されます。</li>
+                    <li><b>修正</b>：コンデンサーの導線部分を流れる粒の量が、ほかの導線の半分になっていたのを直しました。</li>
+                </ul>
+            </div>
+            <div class="history-item">
+                <span class="history-ver">Ver 2.97 (2026/11/05)</span>
+                <ul>
+                    <li><b>改善</b>：スマホの横画面で、縦向きの速度スライダーを切替ボタンと同じ中心にそろえ、つまみの時計を正しい向き（長針が上）にしました。つまみを上下にドラッグするだけで動くようにしました。</li>
+                    <li><b>改善</b>：値変更のウインドウが画面に収まらないときは、ウインドウの中をスクロールできるようにしました。</li>
+                </ul>
+            </div>
             <div class="history-item">
                 <span class="history-ver">Ver 2.96 (2026/11/05)</span>
                 <ul>
@@ -270,7 +286,7 @@
         </div>
 
         <footer>
-            <p>&copy; 2026 Atsushi Inagaki. Version <span data-app-version>2.96</span></p>
+            <p>&copy; 2026 Atsushi Inagaki. Version <span data-app-version>2.98</span></p>
         </footer>
 
     <script src="../version.js"></script>

@@ -28,6 +28,12 @@ let graphRangeI = 1.00;
 let showAbsoluteValues = true; // Default to ON as requested
 let showIllustrations = false; // ver2.02: イラスト表示モードのフラグ
 let isElectronMode = false; // 電子モード（負電荷）のフラグ
+// 粒1個あたりの電気量 [C]。導線を流れる粒の数も極板にたまる粒の数もこれで決まる（全回路共通）
+const CHARGE_PER_PARTICLE_NUMBERS = [1, 2, 5, 10, 20, 50, 100, 200, 500];
+const CHARGE_PER_PARTICLE_UNITS = [['nC', 1e-9], ['μC', 1e-6], ['mC', 1e-3], ['C', 1]]; // 1 nC〜500 C
+const DEFAULT_CHARGE_PER_PARTICLE = 0.02;
+let chargePerParticle = DEFAULT_CHARGE_PER_PARTICLE;
+const CAP_VISIBLE_CHARGE_MAX = 40; // 極板に描く粒の見た目上の上限（片側）
 let modalLastOpened = 0; // モーダルが開かれた時刻を記録
 
 const SUPPORTED_COMPONENT_TYPES = new Set([
@@ -147,6 +153,11 @@ function validateCircuitFile(data) {
             }
             settings.timeScale = data.settings.timeScale;
         }
+        if (data.settings.chargePerParticle !== undefined) {
+            const parsed = splitChargePerParticle(data.settings.chargePerParticle);
+            if (!parsed) throw new Error('settings.chargePerParticle が範囲外です。');
+            settings.chargePerParticle = parsed.value;
+        }
         if (data.settings.toolbarVisibility !== undefined) {
             if (!data.settings.toolbarVisibility || typeof data.settings.toolbarVisibility !== 'object' ||
                 Array.isArray(data.settings.toolbarVisibility)) {
@@ -188,6 +199,7 @@ function buildCircuitData() {
             isElectronMode: checked('electron-mode-checkbox'),
             timeScale: parseFloat(document.getElementById('time-scale-slider').value),
             showIllustrations: checked('illustration-checkbox'),
+            chargePerParticle: chargePerParticle,
             toolbarVisibility: toolbarVisibility
         }
     };
@@ -235,6 +247,7 @@ function applyCircuitDataInner(data) {
         applyToggle('results-toggle-checkbox', data.settings.showResults);
         applyToggle('illustration-checkbox', data.settings.showIllustrations);
         applyToggle('electron-mode-checkbox', data.settings.isElectronMode);
+        if (data.settings.chargePerParticle !== undefined) setChargePerParticle(data.settings.chargePerParticle);
 
         if (data.settings.timeScale !== undefined) {
             const slider = document.getElementById('time-scale-slider');
@@ -756,6 +769,7 @@ let appConfig = {
     bulbGlowK: 30, // 電球の発光係数 k
     bulbGlowMinR: 5, // 最小発光半径
     bulbGlowMaxR: 60, // 最大発光半径
+    chargePerParticle: DEFAULT_CHARGE_PER_PARTICLE, // 粒1個あたりの電気量 [C]
     toolbarVisibility: {} // Will be populated from settings.ini
 };
 
@@ -967,6 +981,14 @@ async function loadSettings() {
             if (key === 'showAbsoluteValues') appConfig.showAbsoluteValues = (value === 'true');
             if (key === 'showIllustrations' || key === 'illustMode') appConfig.showIllustrations = (value === 'true');
             if (key === 'electronmode') appConfig.electronMode = (value === 'true');
+            if (key === 'charge_per_particle') { // 例: 20 mC（値は小文字化されている）
+                const m = value.replace(/\s+/g, '').match(/^([0-9.]+)(nc|μc|uc|mc|c)$/);
+                if (m) {
+                    const unit = { nc: 1e-9, 'μc': 1e-6, uc: 1e-6, mc: 1e-3, c: 1 }[m[2]];
+                    const parsed = splitChargePerParticle(parseFloat(m[1]) * unit);
+                    if (parsed) appConfig.chargePerParticle = parsed.value;
+                }
+            }
             if (key === 'bulb_glow_k') appConfig.bulbGlowK = parseFloat(value) || 30;
             if (key === 'bulb_glow_min_r') appConfig.bulbGlowMinR = parseFloat(value) || 5;
             if (key === 'bulb_glow_max_r') appConfig.bulbGlowMaxR = parseFloat(value) || 60;
@@ -983,7 +1005,31 @@ async function loadSettings() {
     }
 }
 
+// 粒1個の電気量 [C] を「数値 × 単位」に分ける。選べない値なら null
+function splitChargePerParticle(c) {
+    if (!Number.isFinite(c) || c <= 0) return null;
+    for (const [unit, factor] of CHARGE_PER_PARTICLE_UNITS) {
+        const num = Math.round(c / factor * 1e6) / 1e6;
+        if (CHARGE_PER_PARTICLE_NUMBERS.includes(num)) return { num, unit, value: num * factor };
+    }
+    return null;
+}
+
+// 粒1個の電気量を変える（設定パネル・設定ファイル・回路リンクから）
+function setChargePerParticle(c) {
+    const parsed = splitChargePerParticle(c);
+    if (!parsed) return;
+    chargePerParticle = parsed.value;
+    const numSelect = document.getElementById('charge-per-particle-num');
+    const unitSelect = document.getElementById('charge-per-particle-unit');
+    if (numSelect) numSelect.value = String(parsed.num);
+    if (unitSelect) unitSelect.value = parsed.unit;
+    if (simulationResults) renderParticles();
+}
+
 function applySettings() {
+    setChargePerParticle(appConfig.chargePerParticle);
+
     const partCheck = document.getElementById('show-particles-checkbox');
     if (partCheck) partCheck.checked = appConfig.showParticles;
     
@@ -1531,6 +1577,19 @@ function setupEventListeners() {
             };
         }
 
+        const chargeNumSelect = document.getElementById('charge-per-particle-num');
+        const chargeUnitSelect = document.getElementById('charge-per-particle-unit');
+        if (chargeNumSelect && chargeUnitSelect) {
+            const onChargeChange = () => {
+                const factor = (CHARGE_PER_PARTICLE_UNITS.find(([u]) => u === chargeUnitSelect.value) || [])[1];
+                const num = parseFloat(chargeNumSelect.value);
+                if (factor) setChargePerParticle(num * factor);
+                audio.playClick();
+            };
+            chargeNumSelect.addEventListener('change', onChargeChange);
+            chargeUnitSelect.addEventListener('change', onChargeChange);
+        }
+
         const electronModeCheckbox = document.getElementById('electron-mode-checkbox');
         if (electronModeCheckbox) {
             electronModeCheckbox.onchange = (e) => {
@@ -1869,6 +1928,8 @@ function toggleSimulation() {
     if (isSimulating) {
         components.forEach(comp => {
             comp.pProgress = 0;
+            delete comp.capChargeCount;
+            delete comp.capWiggleStart;
             if (comp.legProgress) {
                 comp.legProgress = { left: 0, right: 0, top: 0, bottom: 0 };
             }
@@ -2616,6 +2677,53 @@ function updateTimeScaleDisplay() {
 }
 
 timeScaleSlider.addEventListener('input', updateTimeScaleDisplay);
+
+// スマホ横画面ではスライダーを縦向きに回して表示している。
+// 回したスライダーはブラウザが上下ドラッグを横の操作として扱わないため、自前で値を決める。
+(function setupVerticalTimeScaleSlider() {
+    let dragging = false;
+    const area = timeScaleSlider.parentElement; // つまみ全体を含む枠で受ける（スライダー本体は細い）
+    if (!area) return;
+    const isVertical = () => window.matchMedia(PHONE_LANDSCAPE_QUERY).matches;
+    const setFromPointer = (clientY) => {
+        const rect = timeScaleSlider.getBoundingClientRect(); // 回した後の見た目の範囲（縦長）
+        const thumbHalf = 17; // つまみ(34px)の半分
+        const span = rect.height - thumbHalf * 2;
+        if (span <= 0) return;
+        const ratio = Math.min(1, Math.max(0, (rect.bottom - thumbHalf - clientY) / span)); // 上ほど速い
+        const min = parseFloat(timeScaleSlider.min);
+        const max = parseFloat(timeScaleSlider.max);
+        const step = parseFloat(timeScaleSlider.step) || 0.05;
+        const next = Math.round((min + ratio * (max - min)) / step) * step;
+        const value = Math.min(max, Math.max(min, next)).toFixed(2);
+        if (timeScaleSlider.value !== value) {
+            timeScaleSlider.value = value;
+            timeScaleSlider.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    };
+    area.addEventListener('pointerdown', (e) => {
+        if (!isVertical()) return;
+        e.preventDefault();
+        dragging = true;
+        try { area.setPointerCapture(e.pointerId); } catch (err) { /* 未対応ブラウザは無視 */ }
+        setFromPointer(e.clientY);
+    });
+    area.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        e.preventDefault();
+        setFromPointer(e.clientY);
+    });
+    const stop = (e) => {
+        if (!dragging) return;
+        dragging = false;
+        try { area.releasePointerCapture(e.pointerId); } catch (err) { /* 無視 */ }
+        timeScaleSlider.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    area.addEventListener('pointerup', stop);
+    area.addEventListener('pointercancel', stop);
+    // iOS Safari で既定のスライダー操作が先に始まらないようにする
+    area.addEventListener('touchstart', (e) => { if (isVertical()) e.preventDefault(); }, { passive: false });
+})();
 updateTimeScaleDisplay();
 
 function startAnimation() {
@@ -2644,6 +2752,10 @@ function startAnimation() {
         }
         
         // Particles move continuously by integrating speed
+        // 粒の流量（個/秒）= 電流 / 1粒の電気量。部品の本体は1マスに4粒、脚（半マス）とコンデンサーの導線は2粒なので、
+        // 進み方をそれぞれ 1/(4q)・1/(2q) にすると、どこでも同じ流量になり電荷が保存される
+        const bodyRate = 1 / (4 * chargePerParticle);
+        const legRate = 1 / (2 * chargePerParticle);
         components.forEach(comp => {
             if (comp.type === 'wire_cross') {
                 if (!comp.legProgress) comp.legProgress = { left:0, right:0, top:0, bottom:0 };
@@ -2659,10 +2771,10 @@ function startAnimation() {
                     if (comp.legProgress[side] < 0) comp.legProgress[side] = 1 - (Math.abs(comp.legProgress[side]) % 1);
                 };
 
-                updateLeg(iLeft * 30, 'left');
-                updateLeg(iRight * 30, 'right');
-                updateLeg(iTop * 30, 'top');
-                updateLeg(iBottom * 30, 'bottom');
+                updateLeg(iLeft * legRate, 'left');
+                updateLeg(iRight * legRate, 'right');
+                updateLeg(iTop * legRate, 'top');
+                updateLeg(iBottom * legRate, 'bottom');
             } else if (comp.type === 'wire_t') {
                 if (!comp.legProgress) comp.legProgress = { left:0, right:0, top:0, bottom:0 };
                 const i1 = simulationResults ? (simulationResults.currents[comp.id + '_1'] || 0) : 0;
@@ -2682,10 +2794,10 @@ function startAnimation() {
                     if (comp.legProgress[side] < 0) comp.legProgress[side] = 1 - (Math.abs(comp.legProgress[side]) % 1);
                 };
 
-                updateLeg(iLeft * 30, 'left');
-                updateLeg(iRight * 30, 'right');
-                updateLeg(iTop * 30, 'top');
-                updateLeg(iBottom * 30, 'bottom');
+                updateLeg(iLeft * legRate, 'left');
+                updateLeg(iRight * legRate, 'right');
+                updateLeg(iTop * legRate, 'top');
+                updateLeg(iBottom * legRate, 'bottom');
             } else if (comp.type === 'wire_l') {
                 if (!comp.legProgress) comp.legProgress = { left:0, right:0, top:0, bottom:0 };
                 const updateLeg = (speed, side) => {
@@ -2695,22 +2807,22 @@ function startAnimation() {
                     if (comp.legProgress[side] < 0) comp.legProgress[side] = 1 - (Math.abs(comp.legProgress[side]) % 1);
                 };
                 if (comp.rotation === 0) {
-                    updateLeg((simulationResults.currents[comp.id + '_T'] || 0) * 30, 'top');
-                    updateLeg((simulationResults.currents[comp.id + '_R'] || 0) * 30, 'right');
+                    updateLeg((simulationResults.currents[comp.id + '_T'] || 0) * legRate, 'top');
+                    updateLeg((simulationResults.currents[comp.id + '_R'] || 0) * legRate, 'right');
                 } else if (comp.rotation === 1) {
-                    updateLeg((simulationResults.currents[comp.id + '_R'] || 0) * 30, 'right');
-                    updateLeg((simulationResults.currents[comp.id + '_B'] || 0) * 30, 'bottom');
+                    updateLeg((simulationResults.currents[comp.id + '_R'] || 0) * legRate, 'right');
+                    updateLeg((simulationResults.currents[comp.id + '_B'] || 0) * legRate, 'bottom');
                 } else if (comp.rotation === 2) {
-                    updateLeg((simulationResults.currents[comp.id + '_B'] || 0) * 30, 'bottom');
-                    updateLeg((simulationResults.currents[comp.id + '_L'] || 0) * 30, 'left');
+                    updateLeg((simulationResults.currents[comp.id + '_B'] || 0) * legRate, 'bottom');
+                    updateLeg((simulationResults.currents[comp.id + '_L'] || 0) * legRate, 'left');
                 } else {
-                    updateLeg((simulationResults.currents[comp.id + '_L'] || 0) * 30, 'left');
-                    updateLeg((simulationResults.currents[comp.id + '_T'] || 0) * 30, 'top');
+                    updateLeg((simulationResults.currents[comp.id + '_L'] || 0) * legRate, 'left');
+                    updateLeg((simulationResults.currents[comp.id + '_T'] || 0) * legRate, 'top');
                 }
             } else {
                 let i = simulationResults ? (simulationResults.currents[comp.id] || 0) : 0;
                 if (!comp.hasOwnProperty('pProgress')) comp.pProgress = 0;
-                const speed = i * 15;
+                const speed = i * (comp.type === 'capacitor' ? legRate : bodyRate);
                 const actualSpeed = isElectronMode ? -speed : speed;
                 comp.pProgress += (actualSpeed * dt); // Include timeScale naturally via dt
                 
@@ -3097,6 +3209,26 @@ function drawGraph(canvasId, prop, maxVal) {
     ctx.restore(); // 状態を復元
 }
 
+// コンデンサーの極板に描く粒の数と揺れ（2D・3D共通）
+// 粒の数 = 電気量 Q(=CV) / 粒1個の電気量。導線から1粒届くとちょうど1個増え、出ていくと1個減る。
+// 見た目は片側 CAP_VISIBLE_CHARGE_MAX 個まで。それを超えている間は、1粒出入りするたびに少し揺らす。
+const CAP_WIGGLE_MS = 250;
+function getCapacitorPlateCharges(comp, plateDiff) {
+    const total = Math.abs(getCompSiValue(comp) * plateDiff) / chargePerParticle;
+    const whole = Math.floor(total + 1e-9);
+    const nowMs = performance.now();
+    if (comp.capChargeCount !== undefined && whole !== comp.capChargeCount &&
+        Math.min(whole, comp.capChargeCount) >= CAP_VISIBLE_CHARGE_MAX) {
+        comp.capWiggleStart = nowMs;
+    }
+    comp.capChargeCount = whole;
+    const age = comp.capWiggleStart !== undefined ? nowMs - comp.capWiggleStart : Infinity;
+    return {
+        count: Math.min(whole, CAP_VISIBLE_CHARGE_MAX),
+        wiggle: age < CAP_WIGGLE_MS ? 1 - age / CAP_WIGGLE_MS : 0 // 0〜1
+    };
+}
+
 function renderParticles() {
     const layer = document.getElementById('interaction-layer');
     layer.innerHTML = '';
@@ -3248,8 +3380,11 @@ function renderParticles() {
             };
 
             // 1. Draw Stored Static Charges
-            const rawNum = Math.abs(plateDiff) * 8;
-            const numStatic = Math.min(Math.ceil(rawNum), 40);
+            // 極板の粒の数は2D・3D共通の getCapacitorPlateCharges で決める
+            const plate = getCapacitorPlateCharges(comp, plateDiff);
+            const numStatic = plate.count;
+            const wiggleAmp = 1.6 * scale * plate.wiggle;
+            const nowMs = performance.now();
             if (numStatic > 0) {
                 const isNeg3Positive = plateDiff > 0;
                 let splx = 0, sply = 0, snlx = 0, snly = 0;
@@ -3273,8 +3408,14 @@ function renderParticles() {
                         snly = negPlateOffset + rX; snlx = rY;
                     }
 
-                    // 少数部分を使って滑らかにフェードインさせる
-                    const opacity = Math.min(Math.max(rawNum - s, 0), 1);
+                    const opacity = 1; // 1粒届いたらすぐに1個現れる（フェードなし）
+
+                    if (wiggleAmp > 0) {
+                        const wx = wiggleAmp * Math.sin(nowMs * 0.06 + s * 1.7);
+                        const wy = wiggleAmp * Math.cos(nowMs * 0.05 + s * 2.3);
+                        splx += wx; sply += wy;
+                        snlx -= wy; snly += wx;
+                    }
 
                     // 正極側の電荷（濃いピンク）
                     drawCapParticle(splx, sply, '#ff1493', opacity);

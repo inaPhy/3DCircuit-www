@@ -282,6 +282,16 @@
                         </div>
                     </label>
                 </div>
+                <div class="charge-per-particle-setting">
+                    <div class="charge-per-particle-head">
+                        <span>粒1個の電気量</span>
+                        <span class="charge-per-particle-inputs">
+                            <select id="charge-per-particle-num" aria-label="粒1個の電気量の数値"><option value="1">1</option><option value="2">2</option><option value="5">5</option><option value="10">10</option><option value="20" selected>20</option><option value="50">50</option><option value="100">100</option><option value="200">200</option><option value="500">500</option></select>
+                            <select id="charge-per-particle-unit" aria-label="粒1個の電気量の単位"><option value="nC">nC</option><option value="μC">μC</option><option value="mC" selected>mC</option><option value="C">C</option></select>
+                        </span>
+                    </div>
+                    <p class="charge-per-particle-hint">目安：コンデンサーの容量の数値を10で割り、単位はそのまま（例：100 mF → 10 mC。1.5 V で約15個）</p>
+                </div>
             </div>
 
             <!-- 表示設定 (BOTTOM) -->
@@ -294,7 +304,7 @@
 
             <div class="settings-app-info">
                 <a href="./manual/" target="_blank" rel="noopener">マニュアルを開く</a>
-                <p>Version <span data-app-version>2.96</span></p>
+                <p>Version <span data-app-version>2.98</span></p>
                 <p>&copy; 2026 Atsushi Inagaki.</p>
             </div>
         </div>

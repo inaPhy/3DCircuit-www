@@ -25,6 +25,7 @@
     --inner-fill: transparent;
     --slider-track: rgba(255, 255, 255, 0.4);
     --slider-thumb-img: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke='white' stroke-width='2' fill='%23222222' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 15 15'%3E%3C/polyline%3E%3C/svg%3E");
+    --slider-thumb-img-v: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke='white' stroke-width='2' fill='%23222222' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='rotate(90 12 12)'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 15 15'%3E%3C/polyline%3E%3C/g%3E%3C/svg%3E");
     --comp-slider-thumb-img: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke='white' stroke-width='2' fill='%23222222' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpath d='M 7 12 L 17 12 M 7 12 L 10 9 M 7 12 L 10 15 M 17 12 L 14 9 M 17 12 L 14 15'/%3E%3C/svg%3E");
     --graph-inner-bg: rgba(0,0,0,0.3);
     --graph-grid: rgba(255,255,255,0.05);
@@ -59,6 +60,7 @@
     --inner-fill: #ffffff;
     --slider-track: #333333;
     --slider-thumb-img: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke='%23333333' stroke-width='2' fill='white' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 15 15'%3E%3C/polyline%3E%3C/svg%3E");
+    --slider-thumb-img-v: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke='%23333333' stroke-width='2' fill='white' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='rotate(90 12 12)'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpolyline points='12 6 12 12 15 15'%3E%3C/polyline%3E%3C/g%3E%3C/svg%3E");
     --comp-slider-thumb-img: url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' stroke='%23333333' stroke-width='2' fill='white' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'%3E%3C/circle%3E%3Cpath d='M 7 12 L 17 12 M 7 12 L 10 9 M 7 12 L 10 15 M 17 12 L 14 9 M 17 12 L 14 15'/%3E%3C/svg%3E");
 }
 
@@ -409,6 +411,12 @@ body {
     border: 1px solid var(--glass-border);
     width: 90%;
     max-width: 380px;
+    /* 画面が低いとき（スマホ横画面など）は中身をスクロール */
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
 }
 
 .modal-btns {
@@ -1364,7 +1372,14 @@ input:checked ~ .carrier-thumb {
         height: 40px !important;
         left: 50%;
         top: 50%;
-        transform: translate(calc(-50% + 14px), -50%) rotate(-90deg);
+        transform: translate(-50%, -50%) rotate(-90deg);
+        touch-action: none; /* 上下ドラッグは main.js で処理する */
+    }
+    #time-scale-slider::-webkit-slider-thumb {
+        background-image: var(--slider-thumb-img-v) !important;
+    }
+    #time-scale-slider::-moz-range-thumb {
+        background-image: var(--slider-thumb-img-v) !important;
     }
     #time-scale-slider {
         margin-top: 0 !important;
@@ -1423,4 +1438,39 @@ input:checked ~ .carrier-thumb {
         width: min(360px, calc(100vw - 190px)) !important;
         max-height: calc(100dvh - 20px) !important;
     }
+}
+
+/* キャリア設定: 粒1個の電気量 */
+.charge-per-particle-setting {
+    margin-top: 12px;
+}
+.charge-per-particle-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 13px;
+}
+#charge-per-particle-val {
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+}
+.charge-per-particle-inputs {
+    display: inline-flex;
+    gap: 4px;
+}
+.charge-per-particle-inputs select {
+    font-size: 13px;
+    font-weight: bold;
+    padding: 3px 6px;
+    border: 1px solid #cccccc !important;
+    border-radius: 6px;
+    background: #ffffff !important;
+    color: #333333 !important;
+    cursor: pointer;
+}
+.charge-per-particle-hint {
+    margin: 6px 0 0 !important;
+    font-size: 11px;
+    line-height: 1.5;
+    color: #888888 !important;
 }

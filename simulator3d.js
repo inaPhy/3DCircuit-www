@@ -1303,8 +1303,13 @@ class Simulator3D {
 
                 // 1. Static Stored Charges (Plate Colony)
                 const plateDiff = v1 - v2;
-                const rawNum = Math.abs(plateDiff) * 8;
-                const numStatic = Math.min(Math.ceil(rawNum), 40);
+                // 2Dと同じく電気量 Q / 粒1個の電気量で数える（main.js の getCapacitorPlateCharges）
+                const plate = (typeof getCapacitorPlateCharges === 'function')
+                    ? getCapacitorPlateCharges(comp, plateDiff)
+                    : { count: Math.min(Math.floor(Math.abs(plateDiff) * 8), 40), wiggle: 0 };
+                const numStatic = plate.count;
+                const wiggleAmp = 0.027 * plate.wiggle; // マス幅に対する揺れの大きさ
+                const nowMs = performance.now();
                 if (numStatic > 0) {
                     const isV1Positive = plateDiff > 0;
                     for (let s = 0; s < numStatic; s++) {
@@ -1336,7 +1341,13 @@ class Simulator3D {
                         sz = isV1Positive ? v1 : v2;
                         nz = isV1Positive ? v2 : v1;
 
-                        const scaleFactor = Math.min(Math.max(rawNum - s, 0), 1);
+                        const scaleFactor = 1; // フェードなし
+                        if (wiggleAmp > 0) {
+                            const wx = wiggleAmp * Math.sin(nowMs * 0.06 + s * 1.7);
+                            const wy = wiggleAmp * Math.cos(nowMs * 0.05 + s * 2.3);
+                            splx += wx; sply += wy;
+                            snlx -= wy; snly += wx;
+                        }
 
                         // Positive Charge
                         dummy.position.set(cx + splx * this.GRID_SCALE, cy + sply * this.GRID_SCALE, (sz - minV) * this.Z_SCALE + 2);
