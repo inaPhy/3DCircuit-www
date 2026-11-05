@@ -25,6 +25,135 @@ let showIllustrations = false; // ver2.02: イラスト表示モードのフラ�
 let isElectronMode = false; // 電子モード（負電荷）のフラグ
 let modalLastOpened = 0; // モーダルが開かれた時刻を記録
 
+const SUPPORTED_COMPONENT_TYPES = new Set([
+    'battery', 'ac_source', 'resistor', 'bulb', 'capacitor', 'inductor',
+    'voltmeter', 'ammeter', 'wire', 'wire_l', 'wire_t', 'wire_cross', 'switch'
+]);
+const SAVE_GRID_SIZE_X = 11;
+const SAVE_GRID_SIZE_Y = 7;
+const MAX_SAVED_COMPONENTS = SAVE_GRID_SIZE_X * SAVE_GRID_SIZE_Y;
+
+function serializeComponent(comp) {
+    const saved = {
+        id: comp.id,
+        type: comp.type,
+        x: comp.x,
+        y: comp.y,
+        rotation: comp.rotation,
+        value: comp.value
+    };
+    ['range', 'rInt', 'freq', 'phase'].forEach(key => {
+        if (comp[key] !== undefined) saved[key] = comp[key];
+    });
+    return saved;
+}
+
+function validateCircuitFile(data) {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        throw new Error('保存データがオブジェクトではありません。');
+    }
+    if (!Array.isArray(data.components)) {
+        throw new Error('components が配列ではありません。');
+    }
+    if (data.components.length > MAX_SAVED_COMPONENTS) {
+        throw new Error(`部品数が上限（${MAX_SAVED_COMPONENTS}個）を超えています。`);
+    }
+
+    const ids = new Set();
+    const occupiedCells = new Set();
+    const normalizedComponents = data.components.map((raw, index) => {
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+            throw new Error(`${index + 1}番目の部品データが不正です。`);
+        }
+        if (!SUPPORTED_COMPONENT_TYPES.has(raw.type)) {
+            throw new Error(`${index + 1}番目の部品種類が未対応です。`);
+        }
+
+        const id = (typeof raw.id === 'string' || typeof raw.id === 'number') ? String(raw.id) : '';
+        if (!/^[A-Za-z0-9_-]{1,64}$/.test(id) || ids.has(id)) {
+            throw new Error(`${index + 1}番目の部品IDが不正または重複しています。`);
+        }
+        ids.add(id);
+
+        if (!Number.isInteger(raw.x) || raw.x < 0 || raw.x >= SAVE_GRID_SIZE_X ||
+            !Number.isInteger(raw.y) || raw.y < 0 || raw.y >= SAVE_GRID_SIZE_Y) {
+            throw new Error(`${index + 1}番目の部品座標が範囲外です。`);
+        }
+        const cellKey = `${raw.x},${raw.y}`;
+        if (occupiedCells.has(cellKey)) {
+            throw new Error(`${index + 1}番目の部品が別の部品と重なっています。`);
+        }
+        occupiedCells.add(cellKey);
+
+        if (!Number.isInteger(raw.rotation) || raw.rotation < 0 || raw.rotation > 3) {
+            throw new Error(`${index + 1}番目の回転値が不正です。`);
+        }
+        if (!Number.isFinite(raw.value) || raw.value < 0) {
+            throw new Error(`${index + 1}番目の部品値が不正です。`);
+        }
+        if (raw.type === 'switch' && raw.value !== 0 && raw.value !== 1) {
+            throw new Error(`${index + 1}番目のスイッチ状態が不正です。`);
+        }
+
+        const comp = {
+            id,
+            type: raw.type,
+            x: raw.x,
+            y: raw.y,
+            rotation: raw.rotation,
+            value: raw.type.startsWith('wire') ? 0 : raw.value
+        };
+        ['range', 'rInt', 'freq', 'phase'].forEach(key => {
+            if (raw[key] === undefined) return;
+            if (!Number.isFinite(raw[key]) || raw[key] < 0) {
+                throw new Error(`${index + 1}番目の ${key} が不正です。`);
+            }
+            comp[key] = raw[key];
+        });
+        return comp;
+    });
+
+    let settings = null;
+    if (data.settings !== undefined) {
+        if (!data.settings || typeof data.settings !== 'object' || Array.isArray(data.settings)) {
+            throw new Error('settings の形式が不正です。');
+        }
+        settings = {};
+        [
+            'darkMode', 'absMode', 'show3d', 'showParticles', 'showResults',
+            'isElectronMode', 'showIllustrations'
+        ].forEach(key => {
+            if (data.settings[key] === undefined) return;
+            if (typeof data.settings[key] !== 'boolean') {
+                throw new Error(`settings.${key} は true または false で指定してください。`);
+            }
+            settings[key] = data.settings[key];
+        });
+        if (data.settings.timeScale !== undefined) {
+            if (!Number.isFinite(data.settings.timeScale) || data.settings.timeScale < 0 || data.settings.timeScale > 1) {
+                throw new Error('settings.timeScale が範囲外です。');
+            }
+            settings.timeScale = data.settings.timeScale;
+        }
+        if (data.settings.toolbarVisibility !== undefined) {
+            if (!data.settings.toolbarVisibility || typeof data.settings.toolbarVisibility !== 'object' ||
+                Array.isArray(data.settings.toolbarVisibility)) {
+                throw new Error('settings.toolbarVisibility の形式が不正です。');
+            }
+            settings.toolbarVisibility = {};
+            SUPPORTED_COMPONENT_TYPES.forEach(type => {
+                const visible = data.settings.toolbarVisibility[type];
+                if (visible === undefined) return;
+                if (typeof visible !== 'boolean') {
+                    throw new Error(`toolbarVisibility.${type} は true または false で指定してください。`);
+                }
+                settings.toolbarVisibility[type] = visible;
+            });
+        }
+    }
+    return { components: normalizedComponents, settings };
+}
+
 
 // パネルの重なり順管理
 let topZIndex = 2000;
@@ -95,19 +224,6 @@ class AudioManager {
         gain.gain.linearRampToValueAtTime(0, this.ctx.currentTime + duration);
         noise.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
         noise.start(); noise.stop(this.ctx.currentTime + duration);
-    }
-    playBowan(startFreq = 180, endFreq = 120, duration = 1.2) {
-        if (!this.enabled || !this.ctx) return;
-        const osc = this.ctx.createOscillator();
-        const gain = this.ctx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(startFreq, this.ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(endFreq, this.ctx.currentTime + duration);
-        gain.gain.setValueAtTime(0, this.ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0.2, this.ctx.currentTime + 0.1);
-        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
-        osc.connect(gain); gain.connect(this.ctx.destination);
-        osc.start(); osc.stop(this.ctx.currentTime + duration);
     }
     playGlocken3() {
         if (!this.enabled || !this.ctx) return;
@@ -231,23 +347,6 @@ class AudioManager {
         osc.connect(gain); gain.connect(this.ctx.destination);
         osc.start(); osc.stop(this.ctx.currentTime + duration);
     }
-    playPopPop() {
-        if (!this.enabled || !this.ctx) return;
-        [0, 0.01].forEach(delay => { // ほぼ同時（0.01秒差）に変更
-            const time = this.ctx.currentTime + delay;
-            const duration = 0.06;
-            const osc = this.ctx.createOscillator();
-            const gain = this.ctx.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(500, time);
-            osc.frequency.exponentialRampToValueAtTime(900, time + duration);
-            gain.gain.setValueAtTime(0, time);
-            gain.gain.linearRampToValueAtTime(0.08, time + 0.01);
-            gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
-            osc.connect(gain); gain.connect(this.ctx.destination);
-            osc.start(time); osc.stop(time + duration);
-        });
-    }
     playSwitchKachi() {
         if (!this.enabled || !this.ctx) return;
         const duration = 0.05;
@@ -291,6 +390,59 @@ const compColors = {
     ammeter: '#0099ff'     // Bright Blue
 };
 
+// 3Dcircuit-ARと共通の、学校教材で使いやすい代表値。
+const COMPONENT_VALUE_PRESETS = {
+    battery: [1.5, 3, 4.5, 6],
+    ac_source: [1.5, 3, 5, 12],
+    resistor: [5, 10, 15, 20, 30, 40, 50, 100],
+    capacitor: [100, 1000, 10000, 47000],
+    inductor: [10, 100, 1000, 10000]
+};
+
+function updateValuePresetHighlight(value) {
+    const numericValue = Number(value);
+    document.querySelectorAll('#comp-value-presets button').forEach(button => {
+        const presetValue = Number(button.dataset.value);
+        button.classList.toggle('active', Number.isFinite(numericValue) && Math.abs(presetValue - numericValue) < 1e-9);
+    });
+}
+
+function setComponentEditorValue(value, syncColorCode = true) {
+    const input = document.getElementById('comp-value');
+    const slider = document.getElementById('comp-value-slider');
+    if (input) input.value = value;
+    if (slider) slider.value = value;
+    updateValuePresetHighlight(value);
+    if (syncColorCode) syncResistorColorCodeFromValue(value);
+}
+
+function renderValuePresets(type, currentValue) {
+    const container = document.getElementById('comp-value-presets');
+    if (!container) return;
+    const presets = COMPONENT_VALUE_PRESETS[type];
+    container.innerHTML = '';
+    container.dataset.type = type;
+    if (!presets) {
+        container.style.display = 'none';
+        return;
+    }
+
+    const unit = { battery: 'V', ac_source: 'V', resistor: 'Ω', capacitor: 'μF', inductor: 'mH' }[type];
+    presets.forEach(value => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.value = value;
+        button.textContent = `${value} ${unit}`;
+        button.addEventListener('click', () => {
+            setComponentEditorValue(value);
+            audio.playClick();
+        });
+        container.appendChild(button);
+    });
+    container.style.display = type === 'resistor' ? 'grid' : 'flex';
+    updateValuePresetHighlight(currentValue);
+}
+
 function getCompNodeNames(comp) {
     const left = `v_${comp.x}_${comp.y}`;
     const right = `v_${comp.x + 1}_${comp.y}`;
@@ -330,23 +482,78 @@ let appConfig = {
     toolbarVisibility: {} // Will be populated from settings.ini
 };
 
-// 抵抗器のカラーコード算出ヘルパー (4本帯)
-function getResistorColorBands(value) {
-    const colors = [
-        '#000000', // 0: 黒
-        '#8b4513', // 1: 茶
-        '#ff0000', // 2: 赤
-        '#ffa500', // 3: 橙
-        '#ffff00', // 4: 黄
-        '#008000', // 5: 緑
-        '#0000ff', // 6: 青
-        '#ee82ee', // 7: 紫
-        '#808080', // 8: 灰
-        '#ffffff'  // 9: 白
-    ];
+// シミュレーション時のGND底上げ用のオフセット
+let simulationGroundOffset = 0;
+
+/**
+ * 回路の定常状態（DC）を解析して、最小電位をGNDオフセットとして設定する
+ */
+function updateGroundOffset(netlist) {
+    if (!netlist || netlist.length === 0) {
+        simulationGroundOffset = 0;
+        return;
+    }
+    // 一時的なシミュレータを使用してDC解析を実行
+    const tempSim = new Simulator();
+    const res = tempSim.solve(netlist, 0); // dt=0
+    if (res.success) {
+        let minV = Infinity;
+        for (let id in res.voltages) {
+            if (res.voltages[id] < minV) minV = res.voltages[id];
+        }
+        simulationGroundOffset = (minV === Infinity) ? 0 : minV;
+    } else {
+        simulationGroundOffset = 0;
+    }
+}
+
+/**
+ * シミュレーション結果の電位にオフセットを適用する
+ */
+function applyGroundOffset(res) {
+    if (!res || !res.success || !res.voltages) return res;
+    const shiftedVoltages = {};
+    for (let id in res.voltages) {
+        shiftedVoltages[id] = res.voltages[id] - simulationGroundOffset;
+    }
+    return { ...res, voltages: shiftedVoltages };
+}
+
+const RESISTOR_DIGIT_COLORS = [
+    { name: '黒', color: '#000000', digit: 0 },
+    { name: '茶', color: '#8b4513', digit: 1 },
+    { name: '赤', color: '#ff0000', digit: 2 },
+    { name: '橙', color: '#ffa500', digit: 3 },
+    { name: '黄', color: '#ffff00', digit: 4 },
+    { name: '緑', color: '#008000', digit: 5 },
+    { name: '青', color: '#0000ff', digit: 6 },
+    { name: '紫', color: '#ee82ee', digit: 7 },
+    { name: '灰', color: '#808080', digit: 8 },
+    { name: '白', color: '#ffffff', digit: 9 }
+];
+
+const RESISTOR_MULTIPLIER_COLORS = [
+    { name: '銀', color: '#c0c0c0', exponent: -2 },
+    { name: '金', color: '#ffd700', exponent: -1 },
+    ...RESISTOR_DIGIT_COLORS.map(item => ({ name: item.name, color: item.color, exponent: item.digit }))
+];
+
+const RESISTOR_TOLERANCE_COLORS = [
+    { name: '茶 1%', color: '#8b4513' },
+    { name: '赤 2%', color: '#ff0000' },
+    { name: '緑 0.5%', color: '#008000' },
+    { name: '青 0.25%', color: '#0000ff' },
+    { name: '紫 0.1%', color: '#ee82ee' },
+    { name: '灰 0.05%', color: '#808080' },
+    { name: '金 5%', color: '#ffd700' },
+    { name: '銀 10%', color: '#c0c0c0' }
+];
+
+function getResistorColorBands(value, toleranceColor = '#ffd700') {
+    const colors = RESISTOR_DIGIT_COLORS.map(item => item.color);
     
     // 0 または負の数は黒として扱う
-    if (value <= 0) return [colors[0], colors[0], colors[0], '#ffd700'];
+    if (value <= 0) return [colors[0], colors[0], colors[0], toleranceColor];
 
     // 指数表記を利用して分解 (例: 4700 -> 4.7e+3)
     const s = value.toExponential().split('e');
@@ -380,8 +587,87 @@ function getResistorColorBands(value) {
         colors[Math.max(0, Math.min(9, d1))], 
         colors[Math.max(0, Math.min(9, d2))], 
         mColor, 
-        '#ffd700' // 許容差: 金(±5%)固定
+        toleranceColor
     ];
+}
+
+function setResistorBandOptions(select, options, excludedDigits = []) {
+    select.innerHTML = '';
+    options.forEach(optionData => {
+        if (optionData.digit !== undefined && excludedDigits.includes(optionData.digit)) return;
+        const option = document.createElement('option');
+        option.value = optionData.color;
+        option.textContent = optionData.name;
+        select.appendChild(option);
+    });
+}
+
+function updateResistorBandSwatches() {
+    [1, 2, 3, 4].forEach(index => {
+        const select = document.getElementById(`resistor-band-${index}`);
+        const swatch = document.querySelector(`.resistor-color-swatch[data-band="${index}"]`);
+        if (select && swatch) swatch.style.backgroundColor = select.value;
+    });
+}
+
+function getSelectedResistorColorBands() {
+    return [1, 2, 3, 4].map(index => document.getElementById(`resistor-band-${index}`)?.value).filter(Boolean);
+}
+
+function getResistanceFromColorBands(bands) {
+    if (!Array.isArray(bands) || bands.length < 3) return NaN;
+    const first = RESISTOR_DIGIT_COLORS.find(item => item.color === bands[0]);
+    const second = RESISTOR_DIGIT_COLORS.find(item => item.color === bands[1]);
+    const multiplier = RESISTOR_MULTIPLIER_COLORS.find(item => item.color === bands[2]);
+    if (!first || !second || !multiplier) return NaN;
+    return (first.digit * 10 + second.digit) * Math.pow(10, multiplier.exponent);
+}
+
+function syncResistorColorCodeFromValue(value, toleranceColor) {
+    const container = document.getElementById('resistor-color-code');
+    if (!container || container.style.display === 'none') return;
+    const currentTolerance = toleranceColor || document.getElementById('resistor-band-4')?.value || '#ffd700';
+    const bands = getResistorColorBands(Number(value), currentTolerance);
+    bands.forEach((color, index) => {
+        const select = document.getElementById(`resistor-band-${index + 1}`);
+        if (select && Array.from(select.options).some(option => option.value === color)) select.value = color;
+    });
+    updateResistorBandSwatches();
+}
+
+function renderResistorColorCode(comp) {
+    const container = document.getElementById('resistor-color-code');
+    if (!container) return;
+    if (!comp || comp.type !== 'resistor') {
+        container.style.display = 'none';
+        return;
+    }
+
+    setResistorBandOptions(document.getElementById('resistor-band-1'), RESISTOR_DIGIT_COLORS, [0]);
+    setResistorBandOptions(document.getElementById('resistor-band-2'), RESISTOR_DIGIT_COLORS);
+    setResistorBandOptions(document.getElementById('resistor-band-3'), RESISTOR_MULTIPLIER_COLORS);
+    setResistorBandOptions(document.getElementById('resistor-band-4'), RESISTOR_TOLERANCE_COLORS);
+    container.style.display = 'block';
+
+    const savedBands = Array.isArray(comp.resistorColorBands) ? comp.resistorColorBands : null;
+    const savedValue = getResistanceFromColorBands(savedBands);
+    const usesSavedBands = Number.isFinite(savedValue) && Math.abs(savedValue - Number(comp.value)) < 1e-9;
+    const tolerance = savedBands?.[3] || '#ffd700';
+    const bands = usesSavedBands ? savedBands : getResistorColorBands(Number(comp.value), tolerance);
+    bands.forEach((color, index) => {
+        const select = document.getElementById(`resistor-band-${index + 1}`);
+        if (select && Array.from(select.options).some(option => option.value === color)) select.value = color;
+    });
+    updateResistorBandSwatches();
+}
+
+function applyResistorColorCode() {
+    const bands = getSelectedResistorColorBands();
+    const value = getResistanceFromColorBands(bands);
+    if (!Number.isFinite(value)) return;
+    const normalizedValue = Number(value.toPrecision(12));
+    setComponentEditorValue(normalizedValue, false);
+    updateResistorBandSwatches();
 }
 
 async function loadSettings() {
@@ -489,7 +775,17 @@ function init() {
     setupEventListeners(); // イベントリスナーの登録
     document.documentElement.classList.add('light-mode');
     loadSettings();
+    registerServiceWorker();
     render();
+}
+
+function registerServiceWorker() {
+    if (!('serviceWorker' in navigator)) return;
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./service-worker.js').catch(error => {
+            console.warn('Service Worker registration failed.', error);
+        });
+    });
 }
 
 function updateCanvasSize() {
@@ -675,10 +971,14 @@ function setupEventListeners() {
         compValueSlider.addEventListener('input', (e) => {
             compValueInput.value = e.target.value;
             updatePresetSelect(e.target.value);
+            updateValuePresetHighlight(e.target.value);
+            syncResistorColorCodeFromValue(e.target.value);
         });
         compValueInput.addEventListener('input', (e) => {
             compValueSlider.value = e.target.value;
             updatePresetSelect(e.target.value);
+            updateValuePresetHighlight(e.target.value);
+            syncResistorColorCodeFromValue(e.target.value);
         });
         if (bulbPresetsSelect) {
             bulbPresetsSelect.addEventListener('change', (e) => {
@@ -687,6 +987,11 @@ function setupEventListeners() {
             });
         }
     }
+
+    [1, 2, 3, 4].forEach(index => {
+        const select = document.getElementById(`resistor-band-${index}`);
+        if (select) select.addEventListener('change', applyResistorColorCode);
+    });
 
     // AC Extra fields sync
     const acFreqInput = document.getElementById('comp-freq');
@@ -749,6 +1054,12 @@ function setupEventListeners() {
         paramModal.style.display = 'none';
     };
     document.getElementById('modal-save').onclick = saveParams;
+    paramModal.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' || event.isComposing) return;
+        if (!event.target.matches('input[type="number"]')) return;
+        event.preventDefault();
+        saveParams();
+    });
 
     const acToggleBtn = document.getElementById('modal-ac-toggle');
     const extraGroup = document.getElementById('input-group-extra');
@@ -964,8 +1275,9 @@ function setupEventListeners() {
             });
 
             const data = {
-                version: "1.1",
-                components: components,
+                version: window.APP_VERSION ? window.APP_VERSION.storageFormat : "1.2",
+                appVersion: window.APP_VERSION ? window.APP_VERSION.number : undefined,
+                components: components.map(serializeComponent),
                 settings: {
                     darkMode: document.getElementById('dark-mode-checkbox').checked,
                     absMode: document.getElementById('abs-mode-checkbox').checked,
@@ -1030,13 +1342,14 @@ function setupEventListeners() {
             const reader = new FileReader();
             reader.onload = (event) => {
                 try {
-                    const data = JSON.parse(event.target.result);
-                    if (!data.components) throw new Error("Invalid format");
+                    const parsedData = JSON.parse(event.target.result);
+                    const data = validateCircuitFile(parsedData);
                     
                     // Restore state
                     components = data.components;
                     if (data.settings) {
                         const applyToggle = (id, value) => {
+                            if (value === undefined) return;
                             const el = document.getElementById(id);
                             if (el && el.checked !== (!!value)) {
                                 el.checked = !!value;
@@ -1265,7 +1578,8 @@ function toggleSimulation() {
         });
         simulator.reset();
         activeNetlist = buildNetlist();
-        const res = simulator.solve(activeNetlist, 1e-6);
+        updateGroundOffset(activeNetlist); // GND基準を初期化
+        const res = applyGroundOffset(simulator.solve(activeNetlist, 1e-6));
         if (res.success) {
             simulationResults = res;
             if (messageArea) messageArea.innerText = '開始'; // 短くする
@@ -1549,7 +1863,7 @@ function openEdit(id) {
             'input-group-number', 'input-group-switch', 'input-group-extra', 
             'bulb-presets-container', 'meter-range-container', 'meter-details-content', 
             'bulb-details-content', 'modal-ac-toggle', 'modal-bulb-details-toggle', 
-            'modal-meter-details-toggle', 'input-group-wire-type'
+            'modal-meter-details-toggle', 'input-group-wire-type', 'resistor-color-code'
         ];
         const extraPanel = document.getElementById('input-group-extra');
         groups.forEach(gid => {
@@ -1665,9 +1979,9 @@ function openEdit(id) {
                 if (!isMeter) {
                     let min = 0, max = 100, step = 1;
                     if (comp.type === 'battery' || comp.type === 'ac_source') { min = 0.1; max = 50; step = 0.1; }
-                    else if (comp.type === 'capacitor') { min = 1000; max = 100000; step = 1000; }
-                    else if (comp.type === 'inductor') { min = 100; max = 10000; step = 100; }
-                    else if (comp.type === 'resistor') { min = 1; max = 100; step = 1; }
+                    else if (comp.type === 'capacitor') { min = 100; max = 100000; step = 100; }
+                    else if (comp.type === 'inductor') { min = 10; max = 10000; step = 10; }
+                    else if (comp.type === 'resistor') { min = 1; max = 1000; step = 1; }
                     else if (comp.type === 'bulb') { min = 1; max = 120; step = 1; }
                     
                     slider.min = min;
@@ -1676,6 +1990,8 @@ function openEdit(id) {
                     slider.value = comp.value;
                 }
             }
+            renderValuePresets(comp.type, comp.value);
+            renderResistorColorCode(comp);
 
             const acFields = document.getElementById('extra-ac-only');
             const rIntFields = document.getElementById('extra-rint-only');
@@ -1730,10 +2046,15 @@ function openEdit(id) {
 
 function saveParams() {
     const comp = components.find(c => c.id === editingCompId);
+    let topologyChanged = false; // 導線の形状や回転が変更されたか
+
     if (comp) {
         if (comp.type === 'switch') {
             comp.value = parseInt(document.getElementById('comp-switch-val').value);
         } else if (comp.type.startsWith('wire')) {
+            if (comp.type !== editingCompType || comp.rotation !== editingCompRotation) {
+                topologyChanged = true;
+            }
             comp.type = editingCompType;
             comp.rotation = editingCompRotation;
             comp.value = 0; // Wires have 0 value
@@ -1751,6 +2072,10 @@ function saveParams() {
             comp.value = parseFloat(document.getElementById('meter-rint').value) || 0;
         } else {
             comp.value = Math.max(0, parseFloat(document.getElementById('comp-value').value) || 0);
+            if (comp.type === 'resistor') {
+                const bands = getSelectedResistorColorBands();
+                if (bands.length === 4) comp.resistorColorBands = bands;
+            }
             if (comp.type === 'battery' || comp.type === 'ac_source') {
                 comp.rInt = parseFloat(document.getElementById('comp-rint').value) || 0.001;
                 if (comp.type === 'ac_source') {
@@ -1763,7 +2088,11 @@ function saveParams() {
     }
     paramModal.style.display = 'none';
     if (isSimulating) {
-        activeNetlist = buildNetlist();
+        if (topologyChanged) {
+            toggleSimulation(); // 導線の形状が変わった場合はシミュレーションを停止
+        } else {
+            activeNetlist = buildNetlist(); // それ以外は解析を継続
+        }
     }
     render();
 }
@@ -1818,7 +2147,7 @@ function render() {
 
         // Tooltip
         wrapper.addEventListener('mousemove', (e) => showTooltip(e, comp));
-        wrapper.addEventListener('mouseleave', () => tooltip.style.display = 'none');
+        wrapper.addEventListener('mouseleave', hideTooltip);
         
         wrapper.addEventListener('pointerdown', (e) => {
             if (e.target.classList.contains('rotate-zone')) return;
@@ -1986,7 +2315,7 @@ function startAnimation() {
         }
         
         if (isSimulating && activeNetlist) {
-            const res = simulator.solve(activeNetlist, dt);
+            const res = applyGroundOffset(simulator.solve(activeNetlist, dt));
             if (res.success) {
                 simulationResults = res;
                 updateDynamicUI(dt);
@@ -2909,7 +3238,8 @@ function drawComponentVisual(comp) {
                 g.appendChild(body);
 
                 // カラーバンド (抵抗値に基づいて動的に算出)
-                const resColors = getResistorColorBands(resValue);
+                const toleranceColor = Array.isArray(comp.resistorColorBands) ? comp.resistorColorBands[3] : undefined;
+                const resColors = getResistorColorBands(resValue, toleranceColor);
                 const bandPositions = [-10, -5, 0, 8];
                 resColors.forEach((c, i) => {
                     const r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
@@ -3537,17 +3867,6 @@ function buildNetlist() {
     });
 
     return netlist;
-}
-
-function runSimulation(fullReset = false) {
-    activeNetlist = buildNetlist();
-    if (fullReset) {
-        simulator.reset();
-        const res = simulator.solve(activeNetlist, 1e-6); // calculate initial t=0+ state
-        if (res.success) {
-            simulationResults = res;
-        }
-    }
 }
 
 function showTooltip(e, comp) {

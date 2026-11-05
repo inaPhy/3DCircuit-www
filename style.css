@@ -445,6 +445,100 @@ body {
     width: 220px;
 }
 
+.value-presets {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 7px;
+    width: 100%;
+    margin-top: 20px;
+}
+
+.value-presets[data-type="resistor"] {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.modal-content .value-presets[data-type="resistor"] button {
+    width: 100%;
+}
+
+.modal-content .value-presets button {
+    flex: 1 1 0;
+    min-width: 0;
+    padding: 8px 4px;
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #333333;
+    font-size: clamp(10px, 3.1vw, 13px);
+    line-height: 1.2;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    touch-action: manipulation;
+}
+
+.modal-content .value-presets button:hover,
+.modal-content .value-presets button:focus-visible {
+    border-color: rgba(51, 51, 51, 0.55);
+    background: rgba(255, 255, 255, 0.72);
+    outline: none;
+}
+
+.modal-content .value-presets button.active {
+    border-color: rgba(51, 51, 51, 0.75);
+    background: rgba(0, 0, 0, 0.14);
+    color: #333333;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+}
+
+.resistor-color-code {
+    box-sizing: border-box;
+    width: 100%;
+    margin: 20px 0 0;
+    padding: 0;
+}
+
+.resistor-color-code-title {
+    margin-bottom: 12px;
+    color: #333333;
+    font-size: 16px;
+    font-weight: 700;
+    text-align: left;
+}
+
+.resistor-band-swatches,
+.resistor-band-selects {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+}
+
+.resistor-band-swatches {
+    justify-items: center;
+    margin-bottom: 8px;
+}
+
+.modal .resistor-band-selects select {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    height: 38px;
+    padding: 5px 3px;
+    font-size: 12px;
+    text-align: center;
+    text-align-last: center;
+}
+
+.resistor-color-swatch {
+    box-sizing: border-box;
+    display: block;
+    width: 34px;
+    height: 34px;
+    border: 1px solid rgba(0, 0, 0, 0.4);
+    border-radius: 4px;
+    background: #000000;
+}
+
 .modal label {
     color: #555555 !important;
     font-weight: 500;
@@ -883,6 +977,35 @@ input:checked + .slider-toggle:before {
 }
 #toolbar-settings-panel #close-toolbar-settings-btn:hover {
     color: #333 !important;
+}
+
+#toolbar-settings-panel .settings-app-info {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid #dddddd;
+    text-align: center;
+    font-size: 12px;
+    line-height: 1.7;
+    color: #666666 !important;
+}
+
+#toolbar-settings-panel .settings-app-info a {
+    display: inline-block;
+    margin-bottom: 4px;
+    color: #2468a2;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+
+#toolbar-settings-panel .settings-app-info a:hover,
+#toolbar-settings-panel .settings-app-info a:focus-visible {
+    color: #17476e;
+}
+
+#toolbar-settings-panel .settings-app-info p {
+    margin: 0;
 }
 
 /* スマホ縦画面向け UIの小型化設定 */

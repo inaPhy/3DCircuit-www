@@ -34,6 +34,30 @@ header p {
     margin-top: 10px;
 }
 
+.app-link {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 10px 22px;
+    color: #fff;
+    background: var(--primary-color);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 999px;
+    font-weight: bold;
+    text-decoration: none;
+    transition: background-color 0.2s, transform 0.2s;
+}
+
+.app-link:hover,
+.app-link:focus-visible {
+    background: #0069d9;
+    transform: translateY(-1px);
+}
+
+.app-link:focus-visible {
+    outline: 3px solid rgba(255, 255, 255, 0.75);
+    outline-offset: 3px;
+}
+
 .container {
     max-width: 900px;
     margin: -40px auto 40px;

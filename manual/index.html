@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-version-title="3D Circuit www マニュアル">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Circuit www マニュアル (ver2.80)</title>
+    <title>3D Circuit www マニュアル</title>
     <link rel="stylesheet" href="style.css">
 </head>
 
@@ -12,7 +12,8 @@
 
     <header>
         <h1>3D Circuit www</h1>
-        <p>Version 2.80 ユーザーズマニュアル</p>
+        <p>Version <span data-app-version>2.86</span> ユーザーズマニュアル</p>
+        <a class="app-link" href="../">アプリに戻る</a>
     </header>
 
     <div class="container">
@@ -39,7 +40,8 @@
             <div class="step-box">
                 <h3><span class="step-num">４</span>値・形状の変更</h3>
                 <p>パーツの中心を<b>ダブルクリック（ダブルタップ）</b>すると、電圧や抵抗などの数値を変更できるよ。<br>
-                導線の場合は、L字やT字などの形状を直接選んで切り替えることもできるよ！</p>
+                    抵抗は4本帯のカラーコードからも抵抗値を設定できるよ。<br>
+                    導線の場合は、L字やT字などの形状を直接選んで切り替えることもできるよ！</p>
             </div>
         </div>
 
@@ -100,11 +102,48 @@
         <div class="card">
             <h2>5. アップデート履歴</h2>
             <div class="history-item">
+                <span class="history-ver">Ver 2.86 (2026/08/17)</span>
+                <ul>
+                    <li><b>抵抗の代表値</b>：5、10、15、20、30、40、50、100 Ωの8種類を4列×2段で選択できるようにしました。</li>
+                </ul>
+            </div>
+            <div class="history-item">
+                <span class="history-ver">Ver 2.85 (2026/08/17)</span>
+                <ul>
+                    <li><b>アプリアイコン</b>：電池パネルそのものを使ったデザインに変更しました。</li>
+                </ul>
+            </div>
+            <div class="history-item">
+                <span class="history-ver">Ver 2.84 (2026/08/17)</span>
+                <ul>
+                    <li><b>アプリ情報</b>：設定パネルにマニュアル、現在のバージョン、著作権表記を追加しました。</li>
+                </ul>
+            </div>
+            <div class="history-item">
+                <span class="history-ver">Ver 2.83 (2026/08/17)</span>
+                <ul>
+                    <li><b>代表値ボタンの改善</b>：表記・配置・選択色を調整し、数値入力後にEnterキーで保存できるようにしました。</li>
+                </ul>
+            </div>
+            <div class="history-item">
+                <span class="history-ver">Ver 2.82 (2026/08/17)</span>
+                <ul>
+                    <li><b>よく使う値</b>：電源・抵抗・コンデンサー・コイルの代表値をワンタップで設定できるようにしました。</li>
+                    <li><b>モバイル数値入力</b>：スマートフォンとタブレットでOS標準の数値キーボードが開きやすい入力欄にしました。</li>
+                </ul>
+            </div>
+            <div class="history-item">
+                <span class="history-ver">Ver 2.81 (2026/08/17)</span>
+                <ul>
+                    <li><b>タブレット対応</b>：PWAとしてホーム画面へ追加し、独立したWebアプリ表示で利用できるようにしました。</li>
+                    <li><b>3D描画の軽量化</b>：3D形状とグリッドの不要な毎フレーム再生成を削減しました。</li>
+                    <li><b>計算と読込の安全性</b>：0値の素子処理と、保存ファイル読込時の検証を改善しました。</li>
+                </ul>
+            </div>
+            <div class="history-item">
                 <span class="history-ver">Ver 2.80 (2026/05/07)</span>
                 <ul>
-                    <li><b>導線バリエーションの拡張</b>：導線の形状（直線・L字・T字・十字）と回転向きを、全11種類から直接選択できるようになりました。</li>
-                    <li><b>編集モーダルのUI/UX改善</b>：設定ウィンドウのデザインを刷新し、操作性を向上。モバイル表示にも最適化。</li>
-                    <li><b>タッチ操作の改善</b>：ダブルタップによる値変更ウィンドウの開閉動作をよりスムーズにしました。</li>
+                    <li><b>導線バリエーションの拡張</b>：導線の形状（直線・L字・T字・十字）の４種類にした．</li>
                 </ul>
             </div>
             <div class="history-item">
@@ -163,9 +202,10 @@
         </div>
 
         <footer>
-            <p>&copy; 2026 3D Circuit www Project. Version 2.80</p>
+            <p>&copy; 2026 Atsushi Inagaki. Version <span data-app-version>2.86</span></p>
         </footer>
 
+    <script src="../version.js"></script>
 </body>
 
 </html>

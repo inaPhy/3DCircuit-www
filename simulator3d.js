@@ -1,14 +1,14 @@
 // 抵抗器のカラーコード算出ヘルパー (3D用)
-function getResistorColorBands3D(value) {
+function getResistorColorBands3D(value, toleranceColor = '#ffd700') {
     const colors = ['#000000', '#8b4513', '#ff0000', '#ffa500', '#ffff00', '#008000', '#0000ff', '#ee82ee', '#808080', '#ffffff'];
-    if (value <= 0) return [colors[0], colors[0], colors[0], '#ffd700'];
+    if (value <= 0) return [colors[0], colors[0], colors[0], toleranceColor];
     const s = value.toExponential().split('e');
     let d1 = Math.floor(parseFloat(s[0]));
     let d2 = Math.round((parseFloat(s[0]) - d1) * 10);
     let multiplier = parseInt(s[1]) - 1;
     if (d2 >= 10) { d1++; d2 = 0; if (d1 >= 10) { d1 = 1; multiplier++; } }
     let mColor = (multiplier === -1) ? '#ffd700' : (multiplier === -2 ? '#c0c0c0' : (multiplier >= 0 && multiplier <= 9 ? colors[multiplier] : colors[0]));
-    return [colors[Math.max(0, Math.min(9, d1))], colors[Math.max(0, Math.min(9, d2))], mColor, '#ffd700'];
+    return [colors[Math.max(0, Math.min(9, d1))], colors[Math.max(0, Math.min(9, d2))], mColor, toleranceColor];
 }
 
 class Simulator3D {
@@ -25,6 +25,11 @@ class Simulator3D {
         this.GRID_SCALE = 50; // Visual scale factor for grid X/Y
         this.Z_SCALE = 30;    // Visual scale factor for voltage Z
         this.textureParams = {}; // Cache to avoid recreating textures unnecessarily
+        this.lastStructureKey = '';
+        this.lastResultKey = '';
+        this.lastGridKey = '';
+        this.lastGeometryUpdate = 0;
+        this.geometryUpdateInterval = 50; // 電位面は最大20fpsで更新し、カメラ描画は60fpsを維持
     }
 
     init() {
@@ -179,12 +184,33 @@ class Simulator3D {
         });
     }
 
-    update(components, simulationResults) {
-        this.updateGrid();
+    update(components, simulationResults, force = false) {
         if (!this.isActive || !this.scene || !simulationResults || !components) return;
 
         this.circuitComponents = components;
         this.simulationResults = simulationResults;
+
+        const structureKey = JSON.stringify(components.map(comp => [
+            comp.id, comp.type, comp.x, comp.y, comp.rotation, comp.value,
+            comp.range, comp.rInt, comp.freq, comp.phase
+        ])) + '|' + document.documentElement.classList.contains('light-mode') +
+            '|' + (typeof showIllustrations !== 'undefined' && showIllustrations);
+        const structureChanged = structureKey !== this.lastStructureKey;
+        const roundedEntries = values => Object.keys(values || {}).sort().map(key => {
+            const value = values[key];
+            return [key, Number.isFinite(value) ? Math.round(value * 1000) / 1000 : null];
+        });
+        const resultKey = JSON.stringify([
+            roundedEntries(simulationResults.voltages),
+            roundedEntries(simulationResults.currents)
+        ]);
+        const resultChanged = resultKey !== this.lastResultKey;
+        if (!force && !structureChanged && !resultChanged) return;
+        const now = performance.now();
+        if (!force && !structureChanged && now - this.lastGeometryUpdate < this.geometryUpdateInterval) return;
+        this.lastStructureKey = structureKey;
+        this.lastResultKey = resultKey;
+        this.lastGeometryUpdate = now;
 
         let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
         this.circuitComponents.forEach(comp => {
@@ -196,6 +222,7 @@ class Simulator3D {
         if (minX === Infinity) { minX = 0; maxX = 0; minY = 0; maxY = 0; }
         this.cx = (minX + maxX) / 2;
         this.cy = (minY + maxY) / 2;
+        this.updateGrid();
 
         // activeNodes is built first, we will calculate minV right after building activeNodes.
         // Wait, to calculate minV from activeNodes, activeNodes must be built first!
@@ -512,7 +539,10 @@ class Simulator3D {
         const themeKey = isDarkMode ? "dark" : "light";
         const illKey = (typeof showIllustrations !== 'undefined' && showIllustrations) ? "ill_v29" : "sym_v29";
         // キャッシュキーに値を加える (抵抗値などの変化に対応)
-        const valKey = (comp.type === 'resistor' || comp.type === 'battery') ? "_" + comp.value : "";
+        const colorBandKey = (comp.type === 'resistor' && Array.isArray(comp.resistorColorBands))
+            ? "_" + comp.resistorColorBands.join('-')
+            : "";
+        const valKey = (comp.type === 'resistor' || comp.type === 'battery') ? "_" + comp.value + colorBandKey : "";
         const state = stateValue; // 描画ロジック用
         const key = comp.type + "_" + comp.rotation + "_" + stateKey + "_" + themeKey + "_" + illKey + valKey + (isHighlighted ? "_hl" : "");
         if (this.textureParams[key]) return this.textureParams[key];
@@ -593,7 +623,8 @@ class Simulator3D {
                 ctx.fill();
 
                 // カラーバンド (動的算出)
-                const resColors = getResistorColorBands3D(comp.value);
+                const toleranceColor = Array.isArray(comp.resistorColorBands) ? comp.resistorColorBands[3] : undefined;
+                const resColors = getResistorColorBands3D(comp.value, toleranceColor);
                 const bandX = [-25, -10, 5, 25];
                 resColors.forEach((c, i) => {
                     ctx.fillStyle = c;
@@ -1425,9 +1456,20 @@ class Simulator3D {
     updateGrid() {
         if (!this.gridLines) return;
 
+        const gx = this.GRID_SIZE_X || 11;
+        const gy = this.GRID_SIZE_Y || 7;
+        const cx = this.cx || 0;
+        const cy = this.cy || 0;
+        const gridKey = `${gx}|${gy}|${cx}|${cy}|${this.GRID_SCALE}`;
+        if (gridKey === this.lastGridKey) return;
+        this.lastGridKey = gridKey;
+
         // 既存の線をクリア
         while (this.gridLines.children.length > 0) {
-            this.gridLines.remove(this.gridLines.children[0]);
+            const child = this.gridLines.children[0];
+            this.gridLines.remove(child);
+            if (child.geometry) child.geometry.dispose();
+            if (child.material) child.material.dispose();
         }
 
         const material = new THREE.LineBasicMaterial({
@@ -1438,11 +1480,6 @@ class Simulator3D {
 
         const points = [];
         const scale = this.GRID_SCALE;
-        const gx = this.GRID_SIZE_X || 11;
-        const gy = this.GRID_SIZE_Y || 7;
-        const cx = this.cx || 0;
-        const cy = this.cy || 0;
-
         // 垂直線
         for (let i = 0; i <= gx; i++) {
             const x = (i - cx) * scale;

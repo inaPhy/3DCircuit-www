@@ -2,6 +2,19 @@
  * Circuit Simulator using Modified Nodal Analysis (MNA)
  */
 
+const MIN_RESISTANCE = 1e-6;
+const SHORT_CONDUCTANCE = 1 / MIN_RESISTANCE;
+
+function finiteNonNegative(value, fallback) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function resistanceOrShort(value, fallback) {
+    const resistance = finiteNonNegative(value, fallback);
+    return resistance === 0 ? MIN_RESISTANCE : resistance;
+}
+
 class Simulator {
     constructor() {
         this.nodes = [];
@@ -152,7 +165,7 @@ class Simulator {
                 const n2 = nodeMap.get(c.nodes[1]) - 1; // 0-based index
 
                 if (c.type === 'resistor' || c.type === 'bulb' || c.type === 'voltmeter' || c.type === 'ammeter' || (c.type === 'wire')) {
-                    const r = c.type === 'wire' ? 1e-6 : parseFloat(c.value) || 100;
+                    const r = c.type === 'wire' ? MIN_RESISTANCE : resistanceOrShort(c.value, 100);
                     const g = 1 / r;
                     if (n1 !== -1) A.set([n1, n1], math.add(A.get([n1, n1]), g));
                     if (n2 !== -1) A.set([n2, n2], math.add(A.get([n2, n2]), g));
@@ -164,15 +177,16 @@ class Simulator {
                     const isAC = c.type === 'ac_source';
                     const vSourceIdx = isAC ? (vSources.length + acSources.indexOf(c)) : vSources.indexOf(c);
                     const vRow = numVariables + vSourceIdx;
-                    let val = parseFloat(c.value) || 0;
+                    let val = finiteNonNegative(c.value, 0);
                     
                     // Internal Resistance (Default 0.001 ohms)
-                    const rInt = (c.rInt !== undefined) ? parseFloat(c.rInt) : 0.001;
+                    const rInt = finiteNonNegative(c.rInt, 0.001);
 
                     if (isAC) {
                         // AC Source: V(t) = Vpeak * sin(2 * PI * f * t + phase)
-                        const f = parseFloat(c.freq) || 1.0;
-                        const p = (parseFloat(c.phase) || 0) * (Math.PI / 180);
+                        const f = finiteNonNegative(c.freq, 1.0);
+                        const phase = Number(c.phase);
+                        const p = (Number.isFinite(phase) ? phase : 0) * (Math.PI / 180);
                         val = val * Math.sin(2 * Math.PI * f * this.time + p);
                     }
 
@@ -191,7 +205,7 @@ class Simulator {
                     Z.set([vRow, 0], val);
                 } else if (c.type === 'capacitor') {
                     if (dt > 0) {
-                        const c_val = (parseFloat(c.value) || 10000) * 1e-6; // uF to F
+                        const c_val = finiteNonNegative(c.value, 10000) * 1e-6; // uF to F
                         const g = c_val / dt;
                         const vprev = this.history.voltages[c.id] || 0;
                         const ieq = g * vprev; // Flows n1 -> n2
@@ -217,8 +231,8 @@ class Simulator {
                     }
                 } else if (c.type === 'inductor') {
                     if (dt > 0) {
-                        const l_val = (parseFloat(c.value) || 1000) * 1e-3; // mH to H
-                        const g = dt / l_val;
+                        const l_val = finiteNonNegative(c.value, 1000) * 1e-3; // mH to H
+                        const g = l_val === 0 ? SHORT_CONDUCTANCE : dt / l_val;
                         const iprev = this.history.currents[c.id] || 0; // Flows n1 -> n2
                         
                         if (n1 !== -1) A.set([n1, n1], math.add(A.get([n1, n1]), g));
@@ -259,7 +273,7 @@ class Simulator {
                 const v1 = voltages[c.nodes[0]];
                 const v2 = voltages[c.nodes[1]];
                 if (c.type === 'resistor' || c.type === 'bulb' || c.type === 'voltmeter' || c.type === 'ammeter' || c.type === 'wire') {
-                    const r = c.type === 'wire' ? 1e-6 : parseFloat(c.value) || 100;
+                    const r = c.type === 'wire' ? MIN_RESISTANCE : resistanceOrShort(c.value, 100);
                     currents[c.id] = (v1 - v2) / r;
                 } else if (c.type === 'battery' || c.type === 'ac_source') {
                     const isAC = c.type === 'ac_source';
@@ -267,7 +281,7 @@ class Simulator {
                     currents[c.id] = X.get([numVariables + vSourceIdx, 0]);
                 } else if (c.type === 'capacitor') {
                     if (dt > 0) {
-                        const c_val = (parseFloat(c.value) || 10000) * 1e-6;
+                        const c_val = finiteNonNegative(c.value, 10000) * 1e-6;
                         const g = c_val / dt;
                         const ieq = g * (this.history.voltages[c.id] || 0);
                         currents[c.id] = (v1 - v2) * g - ieq;
@@ -277,8 +291,8 @@ class Simulator {
                     this.history.voltages[c.id] = v1 - v2;
                 } else if (c.type === 'inductor') {
                     if (dt > 0) {
-                        const l_val = (parseFloat(c.value) || 1000) * 1e-3;
-                        const g = dt / l_val;
+                        const l_val = finiteNonNegative(c.value, 1000) * 1e-3;
+                        const g = l_val === 0 ? SHORT_CONDUCTANCE : dt / l_val;
                         const iprev = this.history.currents[c.id] || 0;
                         currents[c.id] = (v1 - v2) * g + iprev;
                     } else {

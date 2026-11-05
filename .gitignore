@@ -1,0 +1,6 @@
+# macOS
+.DS_Store
+
+# Google Drive
+.tmp.driveupload/
+.tmp.drivedownload/

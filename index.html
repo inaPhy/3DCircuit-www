@@ -1,10 +1,18 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="ja" data-version-title="3D Circuit www">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Circuit www (ver2.70)</title>
+    <title>3D Circuit www</title>
+    <meta name="theme-color" content="#ffffff">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="3D Circuit">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/app-icon-192.png" sizes="192x192" type="image/png">
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" sizes="180x180">
     <link rel="stylesheet" href="style.css">
     <!-- Google Fonts -->
     <link
@@ -171,7 +179,8 @@
                 <div class="tool-item" data-type="wire_cross" title="導線(十字)">
                     <div class="icon-box" style="background-color: var(--bg-wire);">
                         <svg viewBox="-30 -30 60 60" style="width: 100%; height: 100%; overflow: visible;">
-                            <path d="M -30,0 L 30,0 M 0,-30 L 0,30" stroke="currentColor" stroke-width="2" fill="none" />
+                            <path d="M -30,0 L 30,0 M 0,-30 L 0,30" stroke="currentColor" stroke-width="2"
+                                fill="none" />
                             <circle cx="0" cy="0" r="3.5" fill="currentColor" stroke="none" />
                         </svg>
                     </div>
@@ -279,6 +288,12 @@
                 <div id="toolbar-visibility-list" style="display:flex; flex-direction:column; gap:8px;">
                     <!-- JSで動的に生成 -->
                 </div>
+            </div>
+
+            <div class="settings-app-info">
+                <a href="./manual/" target="_blank" rel="noopener">マニュアルを開く</a>
+                <p>Version <span data-app-version>2.86</span></p>
+                <p>&copy; 2026 Atsushi Inagaki.</p>
             </div>
         </div>
 
@@ -515,7 +530,8 @@
                             <label
                                 style="display: block; margin-bottom: 5px; font-size: 14px; color: var(--text-secondary);">内部抵抗</label>
                             <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                <input type="number" id="meter-rint" step="any" min="0"
+                                <input type="number" id="meter-rint" step="any" min="0" inputmode="decimal"
+                                    enterkeyhint="done"
                                     style="width: 160px; font-size: 24px; font-weight: bold; text-align: right; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--glass-border);">
                                 <span style="font-size: 18px; font-weight: bold;">Ω</span>
                             </div>
@@ -527,68 +543,145 @@
                                 <label for="comp-value" id="comp-value-label"
                                     style="display: block; margin-bottom: 5px; font-size: 14px; color: var(--text-secondary);">抵抗値</label>
                                 <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                    <input type="number" id="comp-value" step="any" min="0"
+                                    <input type="number" id="comp-value" step="any" min="0" inputmode="decimal"
+                                        enterkeyhint="done"
                                         style="width: 220px; font-size: 32px; font-weight: bold; text-align: right; padding: 5px 15px; border-radius: 8px; border: 1px solid var(--glass-border);">
                                     <span id="comp-unit" style="font-size: 18px; font-weight: bold;">Ω</span>
                                 </div>
                             </div>
                             <input type="range" id="comp-value-slider" step="any" style="width: 100%;">
+                            <div id="comp-value-presets" class="value-presets" aria-label="よく使う値"
+                                style="display: none;"></div>
+                            <div id="resistor-color-code" class="resistor-color-code" style="display: none;"
+                                role="group" aria-label="カラーコード（4本帯）">
+                                <div class="resistor-color-code-title">カラーコード（4本帯）</div>
+                                <div class="resistor-band-swatches" aria-hidden="true">
+                                    <span class="resistor-color-swatch" data-band="1"></span>
+                                    <span class="resistor-color-swatch" data-band="2"></span>
+                                    <span class="resistor-color-swatch" data-band="3"></span>
+                                    <span class="resistor-color-swatch" data-band="4"></span>
+                                </div>
+                                <div class="resistor-band-selects">
+                                    <select id="resistor-band-1" aria-label="カラーコード1本目"></select>
+                                    <select id="resistor-band-2" aria-label="カラーコード2本目"></select>
+                                    <select id="resistor-band-3" aria-label="カラーコード3本目 倍率"></select>
+                                    <select id="resistor-band-4" aria-label="カラーコード4本目 許容差"></select>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
                 <!-- 導線タイプ選択 -->
                 <div class="input-group" id="input-group-wire-type" style="display: none; margin-top: 10px;">
-                    <label style="display: block; margin-bottom: 10px; font-size: 14px; color: var(--text-secondary);">導線の形状と向きを選択</label>
-                    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 6px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 12px; border: 1px solid var(--glass-border); justify-items: center; align-items: center;">
+                    <label
+                        style="display: block; margin-bottom: 10px; font-size: 14px; color: var(--text-secondary);">導線の形状と向きを選択</label>
+                    <div
+                        style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 6px; padding: 12px; background: rgba(255,255,255,0.05); border-radius: 12px; border: 1px solid var(--glass-border); justify-items: center; align-items: center;">
                         <!-- 直線 (2種) -->
-                        <div class="wire-type-option" data-type="wire" data-rotation="0" title="直線 (水平)" style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
-                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;"><path d="M -30,0 L 30,0" stroke="currentColor" stroke-width="3" fill="none"/></svg>
+                        <div class="wire-type-option" data-type="wire" data-rotation="0" title="直線 (水平)"
+                            style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
+                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;">
+                                <path d="M -30,0 L 30,0" stroke="currentColor" stroke-width="3" fill="none" />
+                            </svg>
                         </div>
-                        <div class="wire-type-option" data-type="wire" data-rotation="1" title="直線 (垂直)" style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
-                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;"><path d="M -30,0 L 30,0" transform="rotate(90)" stroke="currentColor" stroke-width="3" fill="none"/></svg>
+                        <div class="wire-type-option" data-type="wire" data-rotation="1" title="直線 (垂直)"
+                            style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
+                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;">
+                                <path d="M -30,0 L 30,0" transform="rotate(90)" stroke="currentColor" stroke-width="3"
+                                    fill="none" />
+                            </svg>
                         </div>
-                        <div></div><div></div>
-                        
-                        <div style="grid-column: 1 / -1; width: 100%; height: 1px; background: var(--glass-border); margin: 4px 0;"></div>
+                        <div></div>
+                        <div></div>
+
+                        <div
+                            style="grid-column: 1 / -1; width: 100%; height: 1px; background: var(--glass-border); margin: 4px 0;">
+                        </div>
 
                         <!-- L字 (4種) -->
-                        <div class="wire-type-option" data-type="wire_l" data-rotation="0" title="L字 (右上)" style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
-                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;"><path d="M 0,-30 L 0,0 L 30,0" stroke="currentColor" stroke-width="3" fill="none"/></svg>
+                        <div class="wire-type-option" data-type="wire_l" data-rotation="0" title="L字 (右上)"
+                            style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
+                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;">
+                                <path d="M 0,-30 L 0,0 L 30,0" stroke="currentColor" stroke-width="3" fill="none" />
+                            </svg>
                         </div>
-                        <div class="wire-type-option" data-type="wire_l" data-rotation="1" title="L字 (右下)" style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
-                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;"><path d="M 0,-30 L 0,0 L 30,0" transform="rotate(90)" stroke="currentColor" stroke-width="3" fill="none"/></svg>
+                        <div class="wire-type-option" data-type="wire_l" data-rotation="1" title="L字 (右下)"
+                            style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
+                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;">
+                                <path d="M 0,-30 L 0,0 L 30,0" transform="rotate(90)" stroke="currentColor"
+                                    stroke-width="3" fill="none" />
+                            </svg>
                         </div>
-                        <div class="wire-type-option" data-type="wire_l" data-rotation="2" title="L字 (左下)" style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
-                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;"><path d="M 0,-30 L 0,0 L 30,0" transform="rotate(180)" stroke="currentColor" stroke-width="3" fill="none"/></svg>
+                        <div class="wire-type-option" data-type="wire_l" data-rotation="2" title="L字 (左下)"
+                            style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
+                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;">
+                                <path d="M 0,-30 L 0,0 L 30,0" transform="rotate(180)" stroke="currentColor"
+                                    stroke-width="3" fill="none" />
+                            </svg>
                         </div>
-                        <div class="wire-type-option" data-type="wire_l" data-rotation="3" title="L字 (左上)" style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
-                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;"><path d="M 0,-30 L 0,0 L 30,0" transform="rotate(270)" stroke="currentColor" stroke-width="3" fill="none"/></svg>
+                        <div class="wire-type-option" data-type="wire_l" data-rotation="3" title="L字 (左上)"
+                            style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
+                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;">
+                                <path d="M 0,-30 L 0,0 L 30,0" transform="rotate(270)" stroke="currentColor"
+                                    stroke-width="3" fill="none" />
+                            </svg>
                         </div>
 
-                        <div style="grid-column: 1 / -1; width: 100%; height: 1px; background: var(--glass-border); margin: 4px 0;"></div>
+                        <div
+                            style="grid-column: 1 / -1; width: 100%; height: 1px; background: var(--glass-border); margin: 4px 0;">
+                        </div>
 
                         <!-- T字 (4種) -->
-                        <div class="wire-type-option" data-type="wire_t" data-rotation="0" title="T字 (下向き)" style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
-                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;"><path d="M -30,0 L 30,0 M 0,0 L 0,30" stroke="currentColor" stroke-width="3" fill="none"/><circle cx="0" cy="0" r="4" fill="currentColor"/></svg>
+                        <div class="wire-type-option" data-type="wire_t" data-rotation="0" title="T字 (下向き)"
+                            style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
+                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;">
+                                <path d="M -30,0 L 30,0 M 0,0 L 0,30" stroke="currentColor" stroke-width="3"
+                                    fill="none" />
+                                <circle cx="0" cy="0" r="4" fill="currentColor" />
+                            </svg>
                         </div>
-                        <div class="wire-type-option" data-type="wire_t" data-rotation="1" title="T字 (左向き)" style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
-                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;"><path d="M -30,0 L 30,0 M 0,0 L 0,30" transform="rotate(90)" stroke="currentColor" stroke-width="3" fill="none"/><circle cx="0" cy="0" r="4" fill="currentColor"/></svg>
+                        <div class="wire-type-option" data-type="wire_t" data-rotation="1" title="T字 (左向き)"
+                            style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
+                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;">
+                                <path d="M -30,0 L 30,0 M 0,0 L 0,30" transform="rotate(90)" stroke="currentColor"
+                                    stroke-width="3" fill="none" />
+                                <circle cx="0" cy="0" r="4" fill="currentColor" />
+                            </svg>
                         </div>
-                        <div class="wire-type-option" data-type="wire_t" data-rotation="2" title="T字 (上向き)" style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
-                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;"><path d="M -30,0 L 30,0 M 0,0 L 0,30" transform="rotate(180)" stroke="currentColor" stroke-width="3" fill="none"/><circle cx="0" cy="0" r="4" fill="currentColor"/></svg>
+                        <div class="wire-type-option" data-type="wire_t" data-rotation="2" title="T字 (上向き)"
+                            style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
+                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;">
+                                <path d="M -30,0 L 30,0 M 0,0 L 0,30" transform="rotate(180)" stroke="currentColor"
+                                    stroke-width="3" fill="none" />
+                                <circle cx="0" cy="0" r="4" fill="currentColor" />
+                            </svg>
                         </div>
-                        <div class="wire-type-option" data-type="wire_t" data-rotation="3" title="T字 (右向き)" style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
-                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;"><path d="M -30,0 L 30,0 M 0,0 L 0,30" transform="rotate(270)" stroke="currentColor" stroke-width="3" fill="none"/><circle cx="0" cy="0" r="4" fill="currentColor"/></svg>
+                        <div class="wire-type-option" data-type="wire_t" data-rotation="3" title="T字 (右向き)"
+                            style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
+                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;">
+                                <path d="M -30,0 L 30,0 M 0,0 L 0,30" transform="rotate(270)" stroke="currentColor"
+                                    stroke-width="3" fill="none" />
+                                <circle cx="0" cy="0" r="4" fill="currentColor" />
+                            </svg>
                         </div>
 
-                        <div style="grid-column: 1 / -1; width: 100%; height: 1px; background: var(--glass-border); margin: 4px 0;"></div>
+                        <div
+                            style="grid-column: 1 / -1; width: 100%; height: 1px; background: var(--glass-border); margin: 4px 0;">
+                        </div>
 
                         <!-- 十字 (1種) -->
-                        <div class="wire-type-option" data-type="wire_cross" data-rotation="0" title="十字" style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
-                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;"><path d="M -30,0 L 30,0 M 0,-30 L 0,30" stroke="currentColor" stroke-width="3" fill="none"/><circle cx="0" cy="0" r="4" fill="currentColor"/></svg>
+                        <div class="wire-type-option" data-type="wire_cross" data-rotation="0" title="十字"
+                            style="cursor: pointer; padding: 6px; border-radius: 10px; border: 2px solid transparent; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.1); width: 100%; max-width: 54px;">
+                            <svg viewBox="-30 -30 60 60" width="36" height="36" style="overflow: visible;">
+                                <path d="M -30,0 L 30,0 M 0,-30 L 0,30" stroke="currentColor" stroke-width="3"
+                                    fill="none" />
+                                <circle cx="0" cy="0" r="4" fill="currentColor" />
+                            </svg>
                         </div>
-                        <div></div><div></div><div></div>
+                        <div></div>
+                        <div></div>
+                        <div></div>
                     </div>
                 </div>
 
@@ -601,6 +694,7 @@
                             style="display: flex; flex-direction: column; align-items: center; gap: 15px; margin-bottom: 15px;">
                             <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
                                 <input type="number" id="comp-freq" step="0.1" min="0.1" max="10"
+                                    inputmode="decimal" enterkeyhint="done"
                                     style="width: 160px; font-size: 24px; font-weight: bold; text-align: right; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--glass-border);">
                                 <span style="font-size: 18px; font-weight: bold;">Hz</span>
                             </div>
@@ -612,6 +706,7 @@
                         <div style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
                             <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
                                 <input type="number" id="comp-phase" step="1" min="0" max="360"
+                                    inputmode="numeric" enterkeyhint="done"
                                     style="width: 160px; font-size: 24px; font-weight: bold; text-align: right; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--glass-border);">
                                 <span style="font-size: 18px; font-weight: bold;">°</span>
                             </div>
@@ -625,6 +720,7 @@
                         <div style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
                             <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
                                 <input type="number" id="comp-rint" step="0.001" min="0.001" max="10"
+                                    inputmode="decimal" enterkeyhint="done"
                                     style="width: 160px; font-size: 24px; font-weight: bold; text-align: right; padding: 5px 10px; border-radius: 8px; border: 1px solid var(--glass-border);">
                                 <span style="font-size: 18px; font-weight: bold;">Ω</span>
                             </div>
@@ -759,6 +855,7 @@
         <div id="tooltip" class="tooltip"></div>
     </div>
 
+    <script src="version.js"></script>
     <script src="lib/three.min.js"></script>
     <script src="lib/OrbitControls.js"></script>
     <script src="simulator.js"></script>
