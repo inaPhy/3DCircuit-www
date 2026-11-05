@@ -23,8 +23,12 @@ const maxGraphHistoryTime = GRAPH_REAL_TIME_WINDOW * 1.0; // 速度スライダ�
 let graphTimeWindow = 2;
 let graphSimTime = 0; // シミュレーション開始からの経過時間（s）
 let graphAccumulatedTime = 0;
-let graphRangeV = 10.0;
-let graphRangeI = 1.00;
+// グラフの縦軸の最大値（settings.ini・保存ファイル・リンクで変えられる）
+const GRAPH_RANGE_LIMITS = { v: [0.1, 100], i: [0.01, 10] }; // スライダーの範囲と同じ
+const DEFAULT_GRAPH_RANGE_V = 5;
+const DEFAULT_GRAPH_RANGE_I = 0.5;
+let graphRangeV = DEFAULT_GRAPH_RANGE_V;
+let graphRangeI = DEFAULT_GRAPH_RANGE_I;
 let showAbsoluteValues = true; // Default to ON as requested
 let showIllustrations = false; // ver2.02: イラスト表示モードのフラグ
 let isElectronMode = false; // 負電荷モードのフラグ（設定画面の「負電荷」）
@@ -153,6 +157,13 @@ function validateCircuitFile(data) {
             }
             settings.timeScale = data.settings.timeScale;
         }
+        [['graphRangeV', 'v'], ['graphRangeI', 'i']].forEach(([key, kind]) => {
+            if (data.settings[key] === undefined) return;
+            if (!isValidGraphRange(kind, data.settings[key])) {
+                throw new Error(`settings.${key} が範囲外です。`);
+            }
+            settings[key] = data.settings[key];
+        });
         if (data.settings.chargePerParticle !== undefined) {
             const parsed = splitChargePerParticle(data.settings.chargePerParticle);
             if (!parsed) throw new Error('settings.chargePerParticle が範囲外です。');
@@ -200,6 +211,8 @@ function buildCircuitData() {
             timeScale: parseFloat(document.getElementById('time-scale-slider').value),
             showIllustrations: checked('illustration-checkbox'),
             chargePerParticle: chargePerParticle,
+            graphRangeV: graphRangeV,
+            graphRangeI: graphRangeI,
             toolbarVisibility: toolbarVisibility
         }
     };
@@ -248,6 +261,9 @@ function applyCircuitDataInner(data) {
         applyToggle('illustration-checkbox', data.settings.showIllustrations);
         applyToggle('electron-mode-checkbox', data.settings.isElectronMode);
         if (data.settings.chargePerParticle !== undefined) setChargePerParticle(data.settings.chargePerParticle);
+        if (data.settings.graphRangeV !== undefined || data.settings.graphRangeI !== undefined) {
+            setGraphRanges(data.settings.graphRangeV, data.settings.graphRangeI);
+        }
 
         if (data.settings.timeScale !== undefined) {
             const slider = document.getElementById('time-scale-slider');
@@ -770,6 +786,8 @@ let appConfig = {
     bulbGlowMinR: 5, // 最小発光半径
     bulbGlowMaxR: 60, // 最大発光半径
     chargePerParticle: DEFAULT_CHARGE_PER_PARTICLE, // 粒1個あたりの電気量 [C]
+    graphRangeV: DEFAULT_GRAPH_RANGE_V, // 電圧グラフの縦軸の最大値 [V]
+    graphRangeI: DEFAULT_GRAPH_RANGE_I, // 電流グラフの縦軸の最大値 [A]
     toolbarVisibility: {} // Will be populated from settings.ini
 };
 
@@ -981,6 +999,14 @@ async function loadSettings() {
             if (key === 'showAbsoluteValues') appConfig.showAbsoluteValues = (value === 'true');
             if (key === 'showIllustrations' || key === 'illustMode') appConfig.showIllustrations = (value === 'true');
             if (key === 'electronmode') appConfig.electronMode = (value === 'true');
+            if (key === 'graph_voltage_max') {
+                const v = parseFloat(value);
+                if (isValidGraphRange('v', v)) appConfig.graphRangeV = v;
+            }
+            if (key === 'graph_current_max') {
+                const v = parseFloat(value);
+                if (isValidGraphRange('i', v)) appConfig.graphRangeI = v;
+            }
             if (key === 'charge_per_particle') { // 例: 20 mC（値は小文字化されている）
                 const m = value.replace(/\s+/g, '').match(/^([0-9.]+)(nc|μc|uc|mc|c)$/);
                 if (m) {
@@ -1029,8 +1055,33 @@ function setChargePerParticle(c) {
     if (simulationResults) renderParticles();
 }
 
+function isValidGraphRange(kind, value) {
+    const [min, max] = GRAPH_RANGE_LIMITS[kind];
+    return Number.isFinite(value) && value >= min && value <= max;
+}
+
+// グラフの縦軸の最大値を変える（設定ファイル・保存ファイル・リンクから）。スライダーと表示も合わせる
+function setGraphRanges(v, i) {
+    if (isValidGraphRange('v', v)) {
+        graphRangeV = v;
+        const slider = document.getElementById('graph-v-range-slider');
+        if (slider) slider.value = v;
+        const label = document.getElementById('graph-v-range-val');
+        if (label) label.innerText = graphRangeV.toFixed(1) + 'V';
+    }
+    if (isValidGraphRange('i', i)) {
+        graphRangeI = i;
+        const slider = document.getElementById('graph-i-range-slider');
+        if (slider) slider.value = i;
+        const label = document.getElementById('graph-i-range-val');
+        if (label) label.innerText = graphRangeI.toFixed(2) + 'A';
+    }
+    if (typeof redrawGraphs === 'function') redrawGraphs();
+}
+
 function applySettings() {
     setChargePerParticle(appConfig.chargePerParticle);
+    setGraphRanges(appConfig.graphRangeV, appConfig.graphRangeI);
 
     const partCheck = document.getElementById('show-particles-checkbox');
     if (partCheck) partCheck.checked = appConfig.showParticles;

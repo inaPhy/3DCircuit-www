@@ -12,7 +12,7 @@
 
     <header>
         <h1>3D Circuit www</h1>
-        <p>Version <span data-app-version>2.99</span> ユーザーズマニュアル</p>
+        <p>Version <span data-app-version>3.00</span> ユーザーズマニュアル</p>
         <a class="app-link" href="../">アプリに戻る</a>
     </header>
 
@@ -102,6 +102,13 @@
         <!-- 5. アップデート履歴 -->
         <div class="card">
             <h2>5. アップデート履歴</h2>
+            <div class="history-item">
+                <span class="history-ver">Ver 3.00 (2026/11/05)</span>
+                <ul>
+                    <li><b>変更</b>：電圧・電流グラフの縦軸の最大値の初期値を 5 V・0.5 A にしました（これまでは 10 V・1 A）。</li>
+                    <li><b>追加</b>：グラフの縦軸の最大値を settings.ini（graph_voltage_max・graph_current_max）で決められるようにし、回路の保存ファイルと回路のリンクにも記録するようにしました。</li>
+                </ul>
+            </div>
             <div class="history-item">
                 <span class="history-ver">Ver 2.99 (2026/11/05)</span>
                 <ul>
@@ -294,7 +301,7 @@
         </div>
 
         <footer>
-            <p>&copy; 2026 Atsushi Inagaki. Version <span data-app-version>2.99</span></p>
+            <p>&copy; 2026 Atsushi Inagaki. Version <span data-app-version>3.00</span></p>
         </footer>
 
     <script src="../version.js"></script>
