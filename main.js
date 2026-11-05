@@ -1455,17 +1455,27 @@ function setupEventListeners() {
                 }
                 audio.playChime(); 
             } else {
+                // 結果ボタンを切ったら、解析結果・電圧グラフ・電流グラフの3つとも閉じる
                 panel.classList.remove('show');
+                document.getElementById('voltage-graph-panel').classList.remove('show');
+                document.getElementById('current-graph-panel').classList.remove('show');
+                selectedGraphCompIds = [];
+                updateResultsTable();
                 audio.playChimeOff();
                 document.querySelectorAll('.comp-highlight').forEach(el => el.remove());
             }
         });
     }
+    // ×で閉じたあと、3つのどれかが残っていれば結果ボタンはオンのまま。全部閉じたらオフにする
+    const syncResultsToggleWithPanels = () => {
+        const anyOpen = ['results-panel', 'voltage-graph-panel', 'current-graph-panel']
+            .some(id => document.getElementById(id).classList.contains('show'));
+        if (!anyOpen && resCheckbox) resCheckbox.checked = false;
+    };
     document.getElementById('close-results-btn').addEventListener('click', () => {
         document.getElementById('results-panel').classList.remove('show');
-        const resCheckbox = document.getElementById('results-toggle-checkbox');
-        if (resCheckbox) resCheckbox.checked = false;
         document.querySelectorAll('.comp-highlight').forEach(el => el.remove());
+        syncResultsToggleWithPanels();
     });
 
     // Modal
@@ -1535,6 +1545,7 @@ function setupEventListeners() {
         if (isPortraitLayout()) document.getElementById(otherId).classList.remove('show');
         if (!document.getElementById(otherId).classList.contains('show')) selectedGraphCompIds = [];
         updateResultsTable();
+        syncResultsToggleWithPanels();
     };
     document.getElementById('close-voltage-graph-btn').onclick = () => closeGraphPanel('voltage-graph-panel', 'current-graph-panel');
     document.getElementById('close-current-graph-btn').onclick = () => closeGraphPanel('current-graph-panel', 'voltage-graph-panel');
