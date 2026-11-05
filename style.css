@@ -1030,8 +1030,8 @@ input:checked + .slider-toggle:before {
 
     /* ゴミ箱の小型化 */
     #trash-can {
-        width: 44px; /* さらに少し小型化 */
-        height: 44px;
+        width: 40px; /* さらに少し小型化 */
+        height: 40px;
         margin: 0; /* 位置指定を解除しフッターに任せる */
     }
     #trash-can svg {
@@ -1040,14 +1040,24 @@ input:checked + .slider-toggle:before {
     }
 
     /* 速度スライダーと切り替えボタンの調整 */
+    .footer-inner {
+        padding: 0 6px !important; /* 左右の余白を削り、ゴミ箱まで画面内に収める */
+    }
     .footer-center {
-        gap: 5px !important; /* !important を追加してインライン設定を上書き */
+        gap: 3px !important; /* !important を追加してインライン設定を上書き */
+    }
+    .footer-center > div {
+        gap: 0 !important; /* 速度スライダーまわりの余白 */
     }
     .custom-toggle-label {
         gap: 2px !important; /* ボタン内のチェックボックスとアイコンの間隔も短縮 */
     }
+    /* スライダーの枠ごと縮める（数値ラベルの位置計算が枠基準のため） */
+    .time-scale-box {
+        width: 76px !important;
+    }
     #time-scale-slider {
-        width: 80px !important; 
+        width: 100% !important;
     }
     .slider-label {
         display: none; 
