@@ -445,6 +445,17 @@ body {
     width: 220px;
 }
 
+.unit-select {
+    font-size: 18px;
+    font-weight: bold;
+    padding: 8px 6px;
+    background: #ffffff;
+    color: #333333;
+    border: 1px solid #ced4da;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
 .value-presets {
     display: flex;
     flex-wrap: nowrap;

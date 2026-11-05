@@ -205,7 +205,7 @@ class Simulator {
                     Z.set([vRow, 0], val);
                 } else if (c.type === 'capacitor') {
                     if (dt > 0) {
-                        const c_val = finiteNonNegative(c.value, 10000) * 1e-6; // uF to F
+                        const c_val = finiteNonNegative(c.value, 1); // F（main.js で換算済み）
                         const g = c_val / dt;
                         const vprev = this.history.voltages[c.id] || 0;
                         const ieq = g * vprev; // Flows n1 -> n2
@@ -231,7 +231,7 @@ class Simulator {
                     }
                 } else if (c.type === 'inductor') {
                     if (dt > 0) {
-                        const l_val = finiteNonNegative(c.value, 1000) * 1e-3; // mH to H
+                        const l_val = finiteNonNegative(c.value, 1); // H（main.js で換算済み）
                         const g = l_val === 0 ? SHORT_CONDUCTANCE : dt / l_val;
                         const iprev = this.history.currents[c.id] || 0; // Flows n1 -> n2
                         
@@ -281,7 +281,7 @@ class Simulator {
                     currents[c.id] = X.get([numVariables + vSourceIdx, 0]);
                 } else if (c.type === 'capacitor') {
                     if (dt > 0) {
-                        const c_val = finiteNonNegative(c.value, 10000) * 1e-6;
+                        const c_val = finiteNonNegative(c.value, 1);
                         const g = c_val / dt;
                         const ieq = g * (this.history.voltages[c.id] || 0);
                         currents[c.id] = (v1 - v2) * g - ieq;
@@ -291,7 +291,7 @@ class Simulator {
                     this.history.voltages[c.id] = v1 - v2;
                 } else if (c.type === 'inductor') {
                     if (dt > 0) {
-                        const l_val = finiteNonNegative(c.value, 1000) * 1e-3;
+                        const l_val = finiteNonNegative(c.value, 1);
                         const g = l_val === 0 ? SHORT_CONDUCTANCE : dt / l_val;
                         const iprev = this.history.currents[c.id] || 0;
                         currents[c.id] = (v1 - v2) * g + iprev;

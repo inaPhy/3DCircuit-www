@@ -42,7 +42,7 @@ function serializeComponent(comp) {
         rotation: comp.rotation,
         value: comp.value
     };
-    ['range', 'rInt', 'freq', 'phase'].forEach(key => {
+    ['range', 'rInt', 'freq', 'phase', 'unit'].forEach(key => {
         if (comp[key] !== undefined) saved[key] = comp[key];
     });
     return saved;
@@ -110,6 +110,13 @@ function validateCircuitFile(data) {
             }
             comp[key] = raw[key];
         });
+        if (raw.unit !== undefined) {
+            const unitConfig = SELECTABLE_UNITS[raw.type];
+            if (!unitConfig || !unitConfig.options.includes(raw.unit)) {
+                throw new Error(`${index + 1}番目の単位が不正です。`);
+            }
+            comp.unit = raw.unit;
+        }
         return comp;
     });
 
@@ -395,9 +402,38 @@ const COMPONENT_VALUE_PRESETS = {
     battery: [1.5, 3, 4.5, 6],
     ac_source: [1.5, 3, 5, 12],
     resistor: [5, 10, 15, 20, 30, 40, 50, 100],
-    capacitor: [100, 1000, 10000, 47000],
-    inductor: [10, 100, 1000, 10000]
+    capacitor: [1, 2, 5, 10, 100],
+    inductor: [1, 2, 5, 10, 100]
 };
+
+// 単位を選べる部品。legacy は unit を持たない旧データ（Ver 2.86 以前）の単位。
+const SELECTABLE_UNITS = {
+    capacitor: { options: ['F', 'mF', 'μF', 'nF'], defaultUnit: 'F', legacy: 'μF' },
+    inductor: { options: ['H', 'mH', 'μH', 'nH'], defaultUnit: 'H', legacy: 'mH' }
+};
+const UNIT_PREFIX_FACTORS = { '': 1, 'm': 1e-3, 'μ': 1e-6, 'n': 1e-9 };
+const FIXED_UNITS = { battery: 'V', ac_source: 'V', resistor: 'Ω', bulb: 'Ω' };
+
+function getCompUnit(comp) {
+    const config = SELECTABLE_UNITS[comp.type];
+    if (!config) return FIXED_UNITS[comp.type] || '';
+    return config.options.includes(comp.unit) ? comp.unit : config.legacy;
+}
+
+// シミュレーター用に F・H 単位へ換算した値
+function getCompSiValue(comp) {
+    const config = SELECTABLE_UNITS[comp.type];
+    if (!config) return comp.value;
+    const unit = getCompUnit(comp);
+    const prefix = unit.slice(0, -1);
+    return comp.value * (UNIT_PREFIX_FACTORS[prefix] ?? 1);
+}
+
+function getEditorUnit(type) {
+    const select = document.getElementById('comp-unit-select');
+    if (SELECTABLE_UNITS[type] && select) return select.value;
+    return FIXED_UNITS[type] || '';
+}
 
 function updateValuePresetHighlight(value) {
     const numericValue = Number(value);
@@ -416,7 +452,7 @@ function setComponentEditorValue(value, syncColorCode = true) {
     if (syncColorCode) syncResistorColorCodeFromValue(value);
 }
 
-function renderValuePresets(type, currentValue) {
+function renderValuePresets(type, currentValue, unit = getEditorUnit(type)) {
     const container = document.getElementById('comp-value-presets');
     if (!container) return;
     const presets = COMPONENT_VALUE_PRESETS[type];
@@ -427,7 +463,6 @@ function renderValuePresets(type, currentValue) {
         return;
     }
 
-    const unit = { battery: 'V', ac_source: 'V', resistor: 'Ω', capacitor: 'μF', inductor: 'mH' }[type];
     presets.forEach(value => {
         const button = document.createElement('button');
         button.type = 'button';
@@ -957,6 +992,14 @@ function setupEventListeners() {
 
     const compValueInput = document.getElementById('comp-value');
     const compValueSlider = document.getElementById('comp-value-slider');
+    const compUnitSelect = document.getElementById('comp-unit-select');
+    if (compUnitSelect) {
+        compUnitSelect.addEventListener('change', () => {
+            const presets = document.getElementById('comp-value-presets');
+            const type = presets ? presets.dataset.type : null;
+            if (type) renderValuePresets(type, compValueInput ? compValueInput.value : undefined);
+        });
+    }
     if (compValueInput && compValueSlider) {
         const bulbPresetsSelect = document.getElementById('bulb-presets-select');
         const updatePresetSelect = (val) => {
@@ -1628,11 +1671,13 @@ function startDragging(e, type, isNew, compId = null) {
     // Determine rotation
     let rot = 0;
     let val = undefined;
+    let ghostUnit = SELECTABLE_UNITS[type] ? SELECTABLE_UNITS[type].defaultUnit : (FIXED_UNITS[type] || '');
     if (compId) {
         const actual = components.find(c => c.id === compId);
         if (actual) {
             rot = actual.rotation;
             val = actual.value;
+            ghostUnit = getCompUnit(actual);
         }
     }
 
@@ -1650,9 +1695,8 @@ function startDragging(e, type, isNew, compId = null) {
 
     // Add upright text for ghost if applicable
     if (!type.startsWith('wire') && type !== 'switch' && type !== 'voltmeter' && type !== 'ammeter') {
-        const unit = { battery: 'V', resistor: 'Ω', bulb: 'Ω', capacitor: 'μF', inductor: 'mH' }[type] || '';
         const txt = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-        txt.textContent = `${val !== undefined ? val : ''}${unit}`;
+        txt.textContent = `${val !== undefined ? val : ''}${ghostUnit}`;
         txt.setAttribute('x', 0);
         txt.setAttribute('y', CELL_SIZE * 0.42);
         txt.setAttribute('text-anchor', 'middle');
@@ -1808,8 +1852,8 @@ function addComponent(type, x, y) {
         ac_source: 1.5,
         resistor: 10,
         bulb: 5,
-        capacitor: 10000,
-        inductor: 1000,
+        capacitor: 1,
+        inductor: 1,
         wire: 0,
         wire_l: 0,
         wire_t: 0,
@@ -1820,6 +1864,7 @@ function addComponent(type, x, y) {
     }[type];
 
     const initialComp = { id, type, x, y, rotation: 0, value: defaultValue };
+    if (SELECTABLE_UNITS[type]) initialComp.unit = SELECTABLE_UNITS[type].defaultUnit;
     if (type === 'voltmeter') initialComp.range = 300;
     else if (type === 'ammeter') initialComp.range = 5;
     
@@ -1907,10 +1952,26 @@ function openEdit(id) {
         } else {
             document.getElementById('input-group-number').style.display = 'block';
             document.getElementById('comp-value').value = comp.value;
-            const unit = { battery: 'V', ac_source: 'V', resistor: 'Ω', bulb: 'Ω', capacitor: 'μF', inductor: 'mH', voltmeter: 'Ω', ammeter: 'Ω' }[comp.type] || '';
+            const unit = (comp.type === 'voltmeter' || comp.type === 'ammeter') ? 'Ω' : getCompUnit(comp);
             const valLabel = { battery: '起電力', ac_source: '振幅(V)', resistor: '抵抗値', bulb: '抵抗値', capacitor: '電気容量', inductor: '自己インダクタンス', voltmeter: '内部抵抗', ammeter: '内部抵抗' }[comp.type] || '値';
             document.getElementById('comp-value-label').innerText = valLabel;
             document.getElementById('comp-unit').innerText = unit;
+            const unitSelect = document.getElementById('comp-unit-select');
+            const unitConfig = SELECTABLE_UNITS[comp.type];
+            if (unitSelect) {
+                unitSelect.innerHTML = '';
+                if (unitConfig) {
+                    unitConfig.options.forEach(option => {
+                        const opt = document.createElement('option');
+                        opt.value = option;
+                        opt.textContent = option;
+                        unitSelect.appendChild(opt);
+                    });
+                    unitSelect.value = unit;
+                }
+                unitSelect.style.display = unitConfig ? '' : 'none';
+                document.getElementById('comp-unit').style.display = unitConfig ? 'none' : '';
+            }
 
             // 電球用のプリセットプルダウン制御
             const bulbPresetsContainer = document.getElementById('bulb-presets-container');
@@ -1979,8 +2040,7 @@ function openEdit(id) {
                 if (!isMeter) {
                     let min = 0, max = 100, step = 1;
                     if (comp.type === 'battery' || comp.type === 'ac_source') { min = 0.1; max = 50; step = 0.1; }
-                    else if (comp.type === 'capacitor') { min = 100; max = 100000; step = 100; }
-                    else if (comp.type === 'inductor') { min = 10; max = 10000; step = 10; }
+                    else if (comp.type === 'capacitor' || comp.type === 'inductor') { min = 1; max = 1000; step = 1; }
                     else if (comp.type === 'resistor') { min = 1; max = 1000; step = 1; }
                     else if (comp.type === 'bulb') { min = 1; max = 120; step = 1; }
                     
@@ -2072,6 +2132,7 @@ function saveParams() {
             comp.value = parseFloat(document.getElementById('meter-rint').value) || 0;
         } else {
             comp.value = Math.max(0, parseFloat(document.getElementById('comp-value').value) || 0);
+            if (SELECTABLE_UNITS[comp.type]) comp.unit = getEditorUnit(comp.type);
             if (comp.type === 'resistor') {
                 const bands = getSelectedResistorColorBands();
                 if (bands.length === 4) comp.resistorColorBands = bands;
@@ -2190,7 +2251,7 @@ function render() {
                     displayValueText = (absCurr > maxA) ? "XXX" : `${rawCurr.toFixed(2)}A`;
                 }
             } else {
-                const unit = { battery: 'V', ac_source: 'V', resistor: 'Ω', bulb: 'Ω', capacitor: 'μF', inductor: 'mH', voltmeter: 'V', ammeter: 'A' }[comp.type] || '';
+                const unit = { voltmeter: 'V', ammeter: 'A' }[comp.type] || getCompUnit(comp);
                 if (comp.type === 'voltmeter' || comp.type === 'ammeter') {
                     displayValueText = `0.00${unit}`;
                 } else {
@@ -3854,7 +3915,7 @@ function buildNetlist() {
             else if (c.rotation === 2) { n1 = right; n2 = left; }
             else { n1 = bottom; n2 = top; }
             
-            const netItem = { id: c.id, type: c.type, nodes: [n1, n2], value: c.value };
+            const netItem = { id: c.id, type: c.type, nodes: [n1, n2], value: getCompSiValue(c) };
             if (c.type === 'battery' || c.type === 'ac_source') {
                 netItem.rInt = c.rInt;
                 if (c.type === 'ac_source') {
