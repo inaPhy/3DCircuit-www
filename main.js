@@ -196,6 +196,17 @@ function buildCircuitData() {
 // 検証済みの回路データ（validateCircuitFile の戻り値）を画面に反映する
 function applyCircuitData(data) {
     if (isSimulating) toggleSimulation(); // 動作中なら停止
+    // 設定の反映でボタン操作用の効果音が鳴らないようにする
+    const soundWasEnabled = audio.enabled;
+    audio.enabled = false;
+    try {
+        applyCircuitDataInner(data);
+    } finally {
+        audio.enabled = soundWasEnabled;
+    }
+}
+
+function applyCircuitDataInner(data) {
     // 今のマス目（スマホ縦画面は横5マス）からはみ出す部品は、画面を狭めたときと同じく削除する
     components = data.components.filter(c => c.x < GRID_SIZE_X && c.y < GRID_SIZE_Y);
     const removedCount = data.components.length - components.length;
@@ -1290,8 +1301,11 @@ function setupEventListeners() {
         resCheckbox.addEventListener('change', (e) => {
             const panel = document.getElementById('results-panel');
             if (e.target.checked) {
-                panel.classList.add('show');
-                updateResultsTable();
+                // 停止中は設定を覚えるだけ。表示はシミュレーション開始時（toggleSimulation）に行う
+                if (isSimulating) {
+                    panel.classList.add('show');
+                    updateResultsTable();
+                }
                 audio.playChime(); 
             } else {
                 panel.classList.remove('show');
