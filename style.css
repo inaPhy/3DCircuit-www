@@ -1454,11 +1454,47 @@ input:checked ~ .carrier-thumb {
     font-weight: bold;
     font-variant-numeric: tabular-nums;
 }
-.charge-per-particle-inputs {
-    display: inline-flex;
-    gap: 4px;
+.charge-help-btn {
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 1.5px solid #999999 !important;
+    border-radius: 50%;
+    background: #ffffff !important;
+    color: #666666 !important;
+    font-size: 12px;
+    font-weight: bold;
+    line-height: 1;
+    cursor: pointer;
 }
-.charge-per-particle-inputs select {
+.charge-help-btn[aria-expanded="true"] {
+    border-color: #e64980 !important;
+    background: #e64980 !important;
+    color: #ffffff !important;
+}
+.charge-per-particle-hint {
+    margin: 6px 0 0 !important;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: #fff0f6 !important;
+    font-size: 12px;
+    line-height: 1.6;
+    color: #555555 !important;
+}
+.charge-per-particle-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+#charge-per-particle-num-val {
+    min-width: 2.2em;
+    text-align: right;
+    font-size: 14px;
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+}
+#charge-per-particle-unit {
     font-size: 13px;
     font-weight: bold;
     padding: 3px 6px;
@@ -1468,9 +1504,49 @@ input:checked ~ .carrier-thumb {
     color: #333333 !important;
     cursor: pointer;
 }
-.charge-per-particle-hint {
-    margin: 6px 0 0 !important;
-    font-size: 11px;
-    line-height: 1.5;
-    color: #888888 !important;
+#charge-per-particle-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 24px;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+}
+#charge-per-particle-slider::-webkit-slider-runnable-track {
+    height: 4px;
+    border-radius: 2px;
+    background: #cccccc;
+}
+/* つまみの色はキャリアの色（正電荷: ピンク / 負電荷: 青紫） */
+#charge-per-particle-slider {
+    --carrier-color: #ff1493;
+}
+body.negative-carrier #charge-per-particle-slider {
+    --carrier-color: #5c5cff;
+}
+#charge-per-particle-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    margin-top: -8px;
+    border-radius: 50%;
+    background: var(--carrier-color);
+    border: 2px solid #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+#charge-per-particle-slider::-moz-range-track {
+    height: 4px;
+    border-radius: 2px;
+    background: #cccccc;
+}
+#charge-per-particle-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--carrier-color);
+    border: 2px solid #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }

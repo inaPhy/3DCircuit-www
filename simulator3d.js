@@ -1304,9 +1304,7 @@ class Simulator3D {
                 // 1. Static Stored Charges (Plate Colony)
                 const plateDiff = v1 - v2;
                 // 2Dと同じく電気量 Q / 粒1個の電気量で数える（main.js の getCapacitorPlateCharges）
-                const plate = (typeof getCapacitorPlateCharges === 'function')
-                    ? getCapacitorPlateCharges(comp, plateDiff)
-                    : { count: Math.min(Math.floor(Math.abs(plateDiff) * 8), 40), wiggle: 0 };
+                const plate = getCapacitorPlateCharges(comp, plateDiff);
                 const numStatic = plate.count;
                 const wiggleAmp = 0.027 * plate.wiggle; // マス幅に対する揺れの大きさ
                 const nowMs = performance.now();
@@ -1314,28 +1312,21 @@ class Simulator3D {
                     const isV1Positive = plateDiff > 0;
                     for (let s = 0; s < numStatic; s++) {
                         if (count >= 2000 || negCount >= 2000) break;
-                        const hash1 = Math.abs(Math.sin(s * 12.9898 + comp.x * 78.233 + comp.y) * 43758.5453);
-                        const hash2 = Math.abs(Math.sin(s * 78.233 + comp.x * 12.9898 + comp.y * 3) * 43758.5453);
-                        const rand1 = hash1 - Math.floor(hash1);
-                        const rand2 = hash2 - Math.floor(hash2);
-
-                        const rY = -0.23 + rand1 * 0.46;
-                        const rX = -0.025 + rand2 * 0.05;
-
+                        // 2Dと同じ並び（main.js の updateCapacitorChargeSlots）を3Dの極板の形に合わせて置く
                         let splx, sply, snlx, snly, sz, nz;
                         const isIll = (typeof showIllustrations !== 'undefined' && showIllustrations);
-                        const v1Offset = (comp.rotation === 0) ? (isIll ? -0.125 : -0.117) : (comp.rotation === 1) ? (isIll ? 0.125 : 0.117) : (comp.rotation === 2) ? (isIll ? 0.125 : 0.117) : (isIll ? -0.125 : -0.117);
-                        const v2Offset = -v1Offset;
-
-                        const posOffset = isV1Positive ? v1Offset : v2Offset;
-                        const negOffset = isV1Positive ? v2Offset : v1Offset;
+                        const geometry = isIll ? CAP_PLATE_GEOMETRY_3D.illustration : CAP_PLATE_GEOMETRY_3D.symbol;
+                        const pc = capacitorSlotToPlateCoords(plate.slots[s], geometry, 0);
+                        // v1 側の極板の向き（3Dは y が上向き）
+                        const v1Dir = (comp.rotation === 0 || comp.rotation === 3) ? -1 : 1;
+                        const posDir = isV1Positive ? v1Dir : -v1Dir;
 
                         if (comp.rotation === 0 || comp.rotation === 2) {
-                            splx = posOffset + (isV1Positive ? rX : -rX); sply = rY;
-                            snlx = negOffset + (isV1Positive ? rX : -rX); snly = rY;
+                            splx = posDir * pc.across; sply = -pc.along; // 2D（y下向き）と同じ並びにするため反転
+                            snlx = -posDir * pc.across; snly = -pc.along;
                         } else {
-                            sply = posOffset - (isV1Positive ? rX : -rX); splx = rY;
-                            snly = negOffset - (isV1Positive ? rX : -rX); snlx = rY;
+                            sply = posDir * pc.across; splx = pc.along;
+                            snly = -posDir * pc.across; snlx = pc.along;
                         }
                         
                         sz = isV1Positive ? v1 : v2;

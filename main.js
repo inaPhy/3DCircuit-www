@@ -27,7 +27,7 @@ let graphRangeV = 10.0;
 let graphRangeI = 1.00;
 let showAbsoluteValues = true; // Default to ON as requested
 let showIllustrations = false; // ver2.02: イラスト表示モードのフラグ
-let isElectronMode = false; // 電子モード（負電荷）のフラグ
+let isElectronMode = false; // 負電荷モードのフラグ（設定画面の「負電荷」）
 // 粒1個あたりの電気量 [C]。導線を流れる粒の数も極板にたまる粒の数もこれで決まる（全回路共通）
 const CHARGE_PER_PARTICLE_NUMBERS = [1, 2, 5, 10, 20, 50, 100, 200, 500];
 const CHARGE_PER_PARTICLE_UNITS = [['nC', 1e-9], ['μC', 1e-6], ['mC', 1e-3], ['C', 1]]; // 1 nC〜500 C
@@ -1020,9 +1020,11 @@ function setChargePerParticle(c) {
     const parsed = splitChargePerParticle(c);
     if (!parsed) return;
     chargePerParticle = parsed.value;
-    const numSelect = document.getElementById('charge-per-particle-num');
+    const numSlider = document.getElementById('charge-per-particle-slider');
+    const numLabel = document.getElementById('charge-per-particle-num-val');
     const unitSelect = document.getElementById('charge-per-particle-unit');
-    if (numSelect) numSelect.value = String(parsed.num);
+    if (numSlider) numSlider.value = CHARGE_PER_PARTICLE_NUMBERS.indexOf(parsed.num);
+    if (numLabel) numLabel.textContent = parsed.num;
     if (unitSelect) unitSelect.value = parsed.unit;
     if (simulationResults) renderParticles();
 }
@@ -1067,6 +1069,7 @@ function applySettings() {
     if (electronCheck && appConfig.hasOwnProperty('electronMode')) {
         electronCheck.checked = appConfig.electronMode;
         isElectronMode = appConfig.electronMode;
+        document.body.classList.toggle('negative-carrier', isElectronMode);
     }
 
     // Apply Toolbar Visibility from settings.ini
@@ -1577,23 +1580,39 @@ function setupEventListeners() {
             };
         }
 
-        const chargeNumSelect = document.getElementById('charge-per-particle-num');
+        // 粒1個の電気量: 数値はスライダー（1〜500）、単位はセレクトボックス
+        const chargeNumSlider = document.getElementById('charge-per-particle-slider');
         const chargeUnitSelect = document.getElementById('charge-per-particle-unit');
-        if (chargeNumSelect && chargeUnitSelect) {
-            const onChargeChange = () => {
+        if (chargeNumSlider && chargeUnitSelect) {
+            const applyChargeInputs = () => {
                 const factor = (CHARGE_PER_PARTICLE_UNITS.find(([u]) => u === chargeUnitSelect.value) || [])[1];
-                const num = parseFloat(chargeNumSelect.value);
-                if (factor) setChargePerParticle(num * factor);
-                audio.playClick();
+                const num = CHARGE_PER_PARTICLE_NUMBERS[parseInt(chargeNumSlider.value, 10)];
+                if (factor && num !== undefined) setChargePerParticle(num * factor);
             };
-            chargeNumSelect.addEventListener('change', onChargeChange);
-            chargeUnitSelect.addEventListener('change', onChargeChange);
+            chargeNumSlider.addEventListener('input', applyChargeInputs);
+            chargeUnitSelect.addEventListener('change', () => {
+                applyChargeInputs();
+                audio.playClick();
+            });
+        }
+        // 「?」で目安の説明を開閉
+        const chargeHelpBtn = document.getElementById('charge-per-particle-help-btn');
+        const chargeHint = document.getElementById('charge-per-particle-hint');
+        if (chargeHelpBtn && chargeHint) {
+            chargeHelpBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const open = chargeHint.hidden;
+                chargeHint.hidden = !open;
+                chargeHelpBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                audio.playClick();
+            });
         }
 
         const electronModeCheckbox = document.getElementById('electron-mode-checkbox');
         if (electronModeCheckbox) {
             electronModeCheckbox.onchange = (e) => {
                 isElectronMode = e.target.checked;
+                document.body.classList.toggle('negative-carrier', isElectronMode); // スライダーのつまみの色をキャリアに合わせる
                 if (isElectronMode) audio.playChime();
                 else audio.playChimeOff();
             };
@@ -1930,6 +1949,8 @@ function toggleSimulation() {
             comp.pProgress = 0;
             delete comp.capChargeCount;
             delete comp.capWiggleStart;
+            delete comp.capSlots;
+            delete comp.capSlotsTime;
             if (comp.legProgress) {
                 comp.legProgress = { left: 0, right: 0, top: 0, bottom: 0 };
             }
@@ -3223,9 +3244,56 @@ function getCapacitorPlateCharges(comp, plateDiff) {
     }
     comp.capChargeCount = whole;
     const age = comp.capWiggleStart !== undefined ? nowMs - comp.capWiggleStart : Infinity;
+    const count = Math.min(whole, CAP_VISIBLE_CHARGE_MAX);
     return {
-        count: Math.min(whole, CAP_VISIBLE_CHARGE_MAX),
+        count,
+        slots: updateCapacitorChargeSlots(comp, count, nowMs),
         wiggle: age < CAP_WIGGLE_MS ? 1 - age / CAP_WIGGLE_MS : 0 // 0〜1
+    };
+}
+
+// 極板上の粒の並び（2D・3D共通）。u: 極板に沿った位置(-1〜1)、lane: 0=内側の面 / 1=その少し奥
+// 実際のコンデンサーと同じく、電荷は向かい合う内側の面に、ほぼ一様（端がやや密）に広がる。
+// 新しい粒は導線がつながる中央から入り、ほかの粒が押し広げられて並び直す。減るときは中央から抜ける。
+const CAP_SLOT_RELAX_MS = 150; // 並び直しの速さ（時定数）
+const CAP_TWO_LANE_FROM = 13;  // これより多いと内側の面に2列で並べる
+function updateCapacitorChargeSlots(comp, count, nowMs) {
+    const slots = comp.capSlots || (comp.capSlots = []);
+    while (slots.length < count) {
+        slots.splice(Math.floor(slots.length / 2), 0, { u: 0, lane: 0 });
+    }
+    while (slots.length > count) {
+        slots.splice(Math.floor(slots.length / 2), 1);
+    }
+    const elapsed = comp.capSlotsTime !== undefined ? nowMs - comp.capSlotsTime : Infinity;
+    comp.capSlotsTime = nowMs;
+    const f = 1 - Math.exp(-elapsed / CAP_SLOT_RELAX_MS);
+    for (let k = 0; k < count; k++) {
+        const uniform = -1 + 2 * (k + 0.5) / count;           // 一様
+        const edge = -Math.cos(Math.PI * (k + 0.5) / count);    // 端に集まる分布
+        const targetU = 0.6 * uniform + 0.4 * edge;
+        const targetLane = count >= CAP_TWO_LANE_FROM ? k % 2 : 0;
+        slots[k].u += (targetU - slots[k].u) * f;
+        slots[k].lane += (targetLane - slots[k].lane) * f;
+    }
+    return slots;
+}
+
+// 極板の形（マス幅に対する割合）。2D と 3D でそれぞれの極板の絵に合わせる
+// halfLen は「いちばん外側の粒の中心」までの距離。見た目の極板の端から粒の半径の半分だけ内側にして、端まで電荷が並ぶようにする
+const CAP_PLATE_GEOMETRY_2D = {
+    symbol: { inner: 4 / 60, outer: 8 / 60, halfLen: 15.5 / 60 },       // 線は ±15 + 丸い端 2 → 見た目の端 ±17
+    illustration: { inner: 3 / 60, outer: 8 / 60, halfLen: 16.5 / 60 }  // 板は ±18
+};
+const CAP_PLATE_GEOMETRY_3D = { // 3D の極板テクスチャ（128px 四方）に合わせた値
+    symbol: { inner: 10.5 / 128, outer: 19.5 / 128, halfLen: 30.3 / 128 },      // 線は ±30 + 丸い端 4.5 → 見た目の端 ±34.5
+    illustration: { inner: 10 / 128, outer: 22 / 128, halfLen: 35.7 / 128 }    // 板は ±40
+};
+// 粒の並びを「極板に沿った距離・中心からの距離」（マス幅に対する割合）に直す
+function capacitorSlotToPlateCoords(slot, geometry, margin) {
+    return {
+        along: slot.u * (geometry.halfLen - margin),
+        across: geometry.inner + (0.25 + 0.5 * slot.lane) * (geometry.outer - geometry.inner)
     };
 }
 
@@ -3388,24 +3456,18 @@ function renderParticles() {
             if (numStatic > 0) {
                 const isNeg3Positive = plateDiff > 0;
                 let splx = 0, sply = 0, snlx = 0, snly = 0;
+                const geometry = showIllustrations ? CAP_PLATE_GEOMETRY_2D.illustration : CAP_PLATE_GEOMETRY_2D.symbol;
+                const posSign = isNeg3Positive ? -1 : 1; // 正の電荷がたまる極板の向き
                 for (let s = 0; s < numStatic; s++) {
-                    const hash1 = Math.abs(Math.sin(s * 12.9898 + comp.x * 78.233 + comp.y) * 43758.5453);
-                    const hash2 = Math.abs(Math.sin(s * 78.233 + comp.x * 12.9898 + comp.y * 3) * 43758.5453);
-                    const rand1 = hash1 - Math.floor(hash1);
-                    const rand2 = hash2 - Math.floor(hash2);
-                    
-                    // すべての値に scale を適用
-                    const rY = (-17 + rand1 * 34) * scale;
-                    const rX = (-2 + rand2 * 4) * scale;
-                    const posPlateOffset = (isNeg3Positive ? -5.5 : 5.5) * scale;
-                    const negPlateOffset = (isNeg3Positive ? 5.5 : -5.5) * scale;
-                    
+                    const pc = capacitorSlotToPlateCoords(plate.slots[s], geometry, 0);
+                    const along = pc.along * CELL_SIZE;
+                    const across = pc.across * CELL_SIZE;
                     if (comp.rotation === 0 || comp.rotation === 2) {
-                        splx = posPlateOffset + rX; sply = rY;
-                        snlx = negPlateOffset + rX; snly = rY;
+                        splx = posSign * across; sply = along;
+                        snlx = -posSign * across; snly = along;
                     } else {
-                        sply = posPlateOffset + rX; splx = rY;
-                        snly = negPlateOffset + rX; snlx = rY;
+                        sply = posSign * across; splx = along;
+                        snly = -posSign * across; snlx = along;
                     }
 
                     const opacity = 1; // 1粒届いたらすぐに1個現れる（フェードなし）
