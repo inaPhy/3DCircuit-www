@@ -14,10 +14,13 @@ let editingCompId = null;
 let editingCompType = null;
 let editingCompRotation = 0;
 let selectedGraphCompIds = []; // Up to 4 components
-let globalGraphHistory = []; // [{ voltages: {id: v, ...}, currents: {id: i, ...} }, ...]
-const maxGraphHistory = 400;
+let globalGraphHistory = []; // [{ t: シミュレーション時刻(s), voltages: {id: v, ...}, currents: {id: i, ...} }, ...]
+const GRAPH_TIME_WINDOWS = [0.5, 1, 2, 5, 10, 20, 50]; // 横軸の表示幅（秒）
+const graphSampleInterval = 0.005; // 記録の最小間隔（シミュレーション時間の秒）
+const maxGraphHistoryTime = Math.max(...GRAPH_TIME_WINDOWS); // これより古い記録は捨てる
+let graphTimeWindow = 2;
+let graphSimTime = 0; // シミュレーション開始からの経過時間（s）
 let graphAccumulatedTime = 0;
-const graphSampleInterval = 0.005;
 let graphRangeV = 10.0;
 let graphRangeI = 1.00;
 let showAbsoluteValues = true; // Default to ON as requested
@@ -1191,15 +1194,31 @@ function setupEventListeners() {
     setupDraggable('current-graph-header', 'current-graph-panel');
 
     // Range Sliders
+    document.querySelectorAll('.graph-time-select').forEach(select => {
+        select.innerHTML = '';
+        GRAPH_TIME_WINDOWS.forEach(sec => {
+            const opt = document.createElement('option');
+            opt.value = sec;
+            opt.textContent = `${sec} s`;
+            select.appendChild(opt);
+        });
+        select.value = graphTimeWindow;
+        select.addEventListener('change', (e) => {
+            graphTimeWindow = parseFloat(e.target.value);
+            document.querySelectorAll('.graph-time-select').forEach(other => { other.value = e.target.value; });
+            redrawGraphs();
+        });
+    });
+
     document.getElementById('graph-v-range-slider').oninput = (e) => {
         graphRangeV = parseFloat(e.target.value);
         document.getElementById('graph-v-range-val').innerText = graphRangeV.toFixed(1) + 'V';
-        if (selectedGraphCompIds.length > 0) updateDynamicUI(0); // Trigger redraw
+        redrawGraphs();
     };
     document.getElementById('graph-i-range-slider').oninput = (e) => {
         graphRangeI = parseFloat(e.target.value);
         document.getElementById('graph-i-range-val').innerText = graphRangeI.toFixed(2) + 'A';
-        if (selectedGraphCompIds.length > 0) updateDynamicUI(0); // Trigger redraw
+        redrawGraphs();
     };
 
     // Toolbar Settings
@@ -1659,7 +1678,7 @@ function toggleSimulation() {
         document.getElementById('voltage-graph-panel').classList.remove('show');
         document.getElementById('current-graph-panel').classList.remove('show');
         selectedGraphCompIds = [];
-        globalGraphHistory = [];
+        resetGraphHistory();
         
         stopAnimation();
         simulator.reset(); // Clear explicit charge/history
@@ -2520,9 +2539,10 @@ function updateDynamicUI(currentDt) {
 
     // Record Graph Data based on simulation time
     if (simulationResults && simulationResults.success) {
+        graphSimTime += currentDt;
         graphAccumulatedTime += currentDt;
         if (graphAccumulatedTime >= graphSampleInterval) {
-            const entry = { voltages: {}, currents: {} };
+            const entry = { t: graphSimTime, voltages: {}, currents: {} };
             const validComponents = components.filter(c => !c.type.startsWith('wire') && c.type !== 'switch');
             
             validComponents.forEach(comp => {
@@ -2537,15 +2557,17 @@ function updateDynamicUI(currentDt) {
             });
 
             globalGraphHistory.push(entry);
-            if (globalGraphHistory.length > maxGraphHistory) globalGraphHistory.shift();
+            const oldestTime = graphSimTime - maxGraphHistoryTime;
+            let dropCount = 0;
+            while (dropCount < globalGraphHistory.length - 1 && globalGraphHistory[dropCount + 1].t <= oldestTime) dropCount++;
+            if (dropCount > 0) globalGraphHistory.splice(0, dropCount);
 
 
             
             document.getElementById('graph-v-range-val').innerText = graphRangeV.toFixed(1) + 'V';
             document.getElementById('graph-i-range-val').innerText = graphRangeI.toFixed(2) + 'A';
             
-            drawGraph('voltage-graph-canvas', 'v', graphRangeV);
-            drawGraph('current-graph-canvas', 'i', graphRangeI);
+            redrawGraphs();
             
             updateGraphLegend();
             graphAccumulatedTime = 0;
@@ -2673,6 +2695,31 @@ function updateGraphLegend() {
     });
 }
 
+function resetGraphHistory() {
+    globalGraphHistory = [];
+    graphSimTime = 0;
+    graphAccumulatedTime = 0;
+}
+
+function redrawGraphs() {
+    drawGraph('voltage-graph-canvas', 'v', graphRangeV);
+    drawGraph('current-graph-canvas', 'i', graphRangeI);
+}
+
+// 横軸の目盛り間隔（1, 2, 5 × 10^n）を、表示幅に4〜5本入るように選ぶ
+function getNiceTimeStep(windowSec) {
+    const rough = windowSec / 4;
+    const pow = Math.pow(10, Math.floor(Math.log10(rough)));
+    const n = rough / pow;
+    const nice = n >= 5 ? 5 : n >= 2 ? 2 : 1;
+    return nice * pow;
+}
+
+function formatTimeLabel(t, step) {
+    const decimals = step >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(step)));
+    return `${t.toFixed(decimals)}s`;
+}
+
 function drawGraph(canvasId, prop, maxVal) {
     const canvas = document.getElementById(canvasId);
     if (!canvas) return;
@@ -2733,6 +2780,36 @@ function drawGraph(canvasId, prop, maxVal) {
         ctx.fillText(label, 4, y - 4);
     });
 
+    // 横軸（時間）: 開始直後は左端が 0 s、表示幅を超えたら右端が現在時刻になるようスクロール
+    const tEnd = Math.max(graphTimeWindow, graphSimTime);
+    const tStart = tEnd - graphTimeWindow;
+    const timeToX = (t) => ((t - tStart) / graphTimeWindow) * sw;
+    const timeStep = getNiceTimeStep(graphTimeWindow);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    for (let k = Math.ceil(tStart / timeStep - 1e-9); k * timeStep <= tEnd + 1e-9; k++) {
+        const t = k * timeStep;
+        const x = timeToX(t);
+        ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)';
+        ctx.beginPath();
+        ctx.moveTo(x, 0); ctx.lineTo(x, sh);
+        ctx.stroke();
+
+        const label = formatTimeLabel(t, timeStep);
+        const labelWidth = ctx.measureText(label).width;
+        const lx = Math.min(Math.max(x, labelWidth / 2 + 2), sw - labelWidth / 2 - 2);
+        ctx.fillStyle = isDark ? 'rgba(30, 30, 30, 0.5)' : 'rgba(255, 255, 255, 0.6)';
+        ctx.fillRect(lx - labelWidth / 2 - 2, sh - 13, labelWidth + 4, 12);
+        ctx.fillStyle = isDark ? 'rgba(255,255,255,0.9)' : 'rgba(0,0,0,0.7)';
+        ctx.fillText(label, lx, sh - 2);
+    }
+
+    // 表示範囲内の記録だけを、横幅の画素数程度に間引いて描く
+    let firstIdx = 0;
+    while (firstIdx < globalGraphHistory.length - 1 && globalGraphHistory[firstIdx + 1].t < tStart) firstIdx++;
+    const visibleCount = globalGraphHistory.length - firstIdx;
+    const stride = Math.max(1, Math.floor(visibleCount / Math.max(1, sw)));
+
     // Draw all traces
     selectedGraphCompIds.forEach((compId, traceIdx) => {
         if (globalGraphHistory.length < 2) return;
@@ -2761,8 +2838,9 @@ function drawGraph(canvasId, prop, maxVal) {
         
         const dataKey = (prop === 'v') ? 'voltages' : 'currents';
         
-        for (let idx = 0; idx < globalGraphHistory.length; idx++) {
-            const x = (idx / (maxGraphHistory - 1)) * sw;
+        let started = false;
+        for (let idx = firstIdx; idx < globalGraphHistory.length; idx += (idx + stride < globalGraphHistory.length - 1 ? stride : 1)) {
+            const x = timeToX(globalGraphHistory[idx].t);
             let val = globalGraphHistory[idx][dataKey][compId];
             if (val === undefined) continue;
 
@@ -2771,7 +2849,7 @@ function drawGraph(canvasId, prop, maxVal) {
             }
 
             const y = sh/2 - (val / maxVal) * (sh * 0.4); 
-            if (idx === 0) ctx.moveTo(x, y);
+            if (!started) { ctx.moveTo(x, y); started = true; }
             else ctx.lineTo(x, y);
         }
         ctx.stroke();
@@ -4056,7 +4134,7 @@ if (trashCan && clearConfirmModal && clearConfirmBackdrop) {
         audio.playTrashAll();  // 全消去用の少し長い「シュッ」という音
         components = [];
         simulationResults = null;
-        globalGraphHistory = [];
+        resetGraphHistory();
         selectedGraphCompIds = [];
         
         // 画面更新
